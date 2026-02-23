@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Leistungswertanalyse</title>
+  <!-- Bibliotheken -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <!-- zentrale, einheitliche Styles -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    .app { }
+    .spinner{width:18px;height:18px;border-radius:50%;border:3px solid #e6eef6;border-top-color:var(--primary,#0070ba);animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;}
+    @keyframes spin{to {transform:rotate(360deg);}}
+
+    #csvChart, #liveChart {
+      background: #fff;
+      display: block;
+      height: 500px;
+    }
+
+    .paypal-donate {
+      text-align: right;
+      margin: 8px 0 0 0;
+    }
+    .donate-btn {
+      margin: 0 0 0 auto;
+      display: inline-block;
+    }
+
+    .device-selection-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 0.75em;
+      margin-top: 1em;
+    }
+    .device-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .device-left label {
+      margin-right: 7px;
+    }
+    .device-left select {
+      min-width: 120px;
+    }
+    .device-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 1 1 0%;
+    }
+    .wechsel-btn {
+      white-space: nowrap;
+    }
+    .card { background: #fff; }
+
+    .controls, .button-group { margin-top: 8px;}
+    .card h2, .card h3 { margin-top: 0; }
+
+    #csvChartHeader {font-size:20px;font-weight:bold; margin-bottom:5px;}
+    #csvZoomContainer {margin: 8px 0 0 0;}
+    #liveChartStats {margin-top: 12px; margin-bottom: 8px;}
+    #liveChartStats .stat {margin-bottom:4px;}
+
+    .button-spacer {margin: 10px 0 10px 0;}
+
+    .csv-buttons-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #csvExtraActions {margin: 0;}
+    #csvActionRow {margin-top:12px; display:flex; gap:12px; align-items:center;}
+    #dropZone {flex:1; cursor:pointer;}
+    #dropZone.dragover {background: #eef0f3; border: 2px dashed #0070ba;}
+
+    .csvhist-buttons-flex {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width:600px) {
+      .site-header-flex { gap:6px; }
+      .logout-btn { margin-right: 4px; }
+      .device-selection-row { flex-wrap: wrap; gap:4px;}
+      .device-right { flex-basis: 100%; justify-content: flex-end; margin:0;}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Spenden & Feedback Kontakt einzeilig -->
+  <div class="paypal-donate" aria-hidden="false">
+    <form action="https://www.paypal.com/donate" method="post" target="_blank">
+      <input type="hidden" name="business" value="fedzzito@gmail.com">
+      <input type="hidden" name="currency_code" value="EUR">
+      <button type="submit" class="donate-btn btn">Spenden & Feedback</button>
+    </form>
+  </div>
+
+<!-- Header -->
+<header class="site-header" role="banner" aria-label="Seitenkopf">
+  <h1>Leistungswertanalyse</h1>
+  <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+</header>
+
+  <main class="container" role="main">
+
+    <!-- Geräteauswahl -->
+    <div class="device-selection-row" role="region" aria-label="Geräteauswahl">
+      <div class="device-left">
+        <label for="devices">Geräteauswahl:</label>
+        <select id="devices"></select>
+      </div>
+      <div class="device-right">
+        <button class="wechsel-btn btn" id="toenergie">zu Energiedaten wechseln</button>
+      </div>
+    </div>
+
+    <!-- Live Chart -->
+    <section id="liveChartContainer" class="card" style="margin-top:18px;">
+      <h2>Live-Daten</h2>
+      <h3 id="currentPower">Aktuelle Leistung: Lade...</h3>
+      <div id="liveZoomContainer" class="button-spacer">
+        <button id="resetZoomLive" class="btn">Zoom zurücksetzen</button>
+      </div>
+      <svg id="liveChart" width="960"></svg>
+      <div id="liveChartStats">
+        <div id="liveMax" class="stat">Maximaler Leistungswert: - W</div>
+        <div id="liveMin" class="stat">Minimaler Leistungswert: - W</div>
+        <div id="liveAvg" class="stat">Durchschnittliche Leistung: - W</div>
+      </div>
+      <div id="liveMetricsContainer" class="button-group">
+        <div id="liveMetrics" class="kv"></div>
+      </div>
+    </section>
+
+    <!-- Historische Leistungswerte -->
+    <section id="csvChartContainer" class="card" style="margin-top:12px;">
+      <div id="csvChartHeader">Historische Leistungswerte</div>
+      <div class="csvhist-buttons-flex">
+        <button id="btnLoadHistorical" class="btn">Historische Leistung anzeigen</button>
+        <button id="resetZoomCSV" class="btn">Zoom zurücksetzen</button>
+      </div>
+      <svg id="csvChart" width="960"></svg>
+      <div id="csvMetricsContainer" class="button-group">
+        <div id="csvMetrics" class="kv">
+          <div id="avgDisplay">Durchschnitt: - W</div>
+          <div id="energyDisplay">
+            <p>Aggregierte Energiemenge Bezug: - kWh</p>
+            <p>Aggregierte Energiemenge Einspeisung: - kWh</p>
+          </div>
+        </div>
+      </div>
+      <div id="csvActionRow">
+        <button id="downloadButton" class="btn">Leistungswerte herunterladen</button>
+        <div id="dropZone">
+          <label for="csvFileInput" style="cursor:pointer;">Datei auswählen oder hier ablegen</label>
+          <input type="file" id="csvFileInput" accept=".csv" style="display:none;">
+        </div>
+      </div>
+      <div id="csvExtraActions" class="controls"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+function getCredentials(){ return localStorage.getItem('credentials'); }
+const AUTH_HEADER = ()=> ({ Authorization: `Basic ${getCredentials()}` });
+
+let selectedDeviceId    = null;
+let liveData            = [];
+let allData             = [];
+let currentLiveDomain   = null;
+let currentCSVDomain    = null;
+let aggregatedDataCSV   = [];
+
+const tooltip = d3.select("body").append("div")
+                  .attr("class","tooltip").style("display","none");
+const formatYAxisTick = d => Math.abs(d)>=1000 ? (d/1000).toFixed(1)+" kW" : d.toFixed(0)+" W";
+
+async function fetchAPI(url){
+  const creds = getCredentials();
+  if(!creds) throw new Error("Nicht angemeldet. Bitte zuerst einloggen.");
+  const r = await fetch(url,{headers: AUTH_HEADER()});
+  if(r.status === 401 || r.status === 403) {
+    localStorage.removeItem('credentials');
+    window.location.href = "index.html";
+    return []; // stop further code
+  }
+  if(!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+async function loadDevices(){
+  const sel = document.getElementById("devices");
+  sel.innerHTML = '<option>Lade Geräte...</option>';
+  selectedDeviceId = null;
+
+  try{
+    const dev = await fetchAPI("https://backend.powerfox.energy/api/2.0/my/all/devices");
+    if (!dev || !Array.isArray(dev)) throw new Error("Keine Geräte erhalten.");
+    if(dev.length === 0) {
+      sel.innerHTML = '<option value="">Keine Geräte gefunden</option>';
+      selectedDeviceId = null;
+      alert("Keine Geräte verfügbar! Bitte prüfen Sie Ihre Anmeldung.");
+      return;
+    }
+    sel.innerHTML = dev.map(d=>`<option value="${d.DeviceId}">${d.DeviceId}</option>`).join("");
+    selectedDeviceId = dev[0]?.DeviceId || null;
+    sel.value = selectedDeviceId;
+    sel.onchange = (e)=>{
+      selectedDeviceId = e.target.value;
+      liveData.length = 0;
+      currentLiveDomain = null;
+      updateLiveChart();
+      loadLiveData();
+    };
+    // Erstes Gerät setzen und laden
+    liveData.length = 0;
+    currentLiveDomain = null;
+    updateLiveChart();
+    loadLiveData();
+    console.debug("loadDevices: found", dev.length, "devices");
+  }catch(e){
+    sel.innerHTML = '<option value="">Fehler beim Laden der Geräte</option>';
+    selectedDeviceId = null;
+    alert("Fehler beim Laden der Geräte: " + e.message + "\nBitte prüfen Sie Ihre Login-Daten.");
+  }
+}
+
+/* Aggregation helpers, ... (unchanged code below) */
+
+function aggregateData(data,start,end,maxPoints){
+  const filtered = data.filter(d=>d.time>=start && d.time<=end);
+  if(!filtered.length) return [];
+  const duration = end-start;
+  const binW = duration/maxPoints;
+  const bins = d3.bin()
+    .value(d=>d.time.getTime())
+    .domain([start.getTime(),end.getTime()])
+    .thresholds(d3.range(start.getTime(),end.getTime(),binW))(filtered);
+  return bins.map(b=>{
+    if(!b.length) return null;
+    const avg = d3.mean(b,d=>d.value);
+    return{
+      time:new Date((b.x0+b.x1)/2),
+      value:avg,
+      rawValues:b,
+      x0:new Date(b.x0),
+      x1:new Date(b.x1)
+    };
+  }).filter(Boolean);
+}
+function addZeroIntersections(data){
+  const out=[];
+  for(let i=0;i<data.length-1;i++){
+    out.push(data[i]);
+    if(data[i].value*data[i+1].value<0){
+      const t0=data[i].time,t1=data[i+1].time,v0=data[i].value,v1=data[i+1].value;
+      const ratio=(0-v0)/(v1-v0);
+      out.push({time:new Date(t0.getTime()+ratio*(t1-t0)),value:0,rawValues:[]});
+    }
+  }
+  out.push(data[data.length-1]); return out;
+}
+function showTooltip(e,html){
+  tooltip.style("display","block").html(html)
+         .style("left",(e.pageX+10)+"px").style("top",(e.pageY+10)+"px");
+}
+function hideTooltip(){ tooltip.style("display","none"); }
+
+/* LIVE CHART ... (unchanged code) */
+
+const liveMargin={top:20,right:20,bottom:80,left:50},
+      liveWidth =960-liveMargin.left-liveMargin.right,
+      liveHeight=300-liveMargin.top-liveMargin.bottom;
+
+const liveSvg = d3.select("#liveChart")
+  .attr("width",liveWidth+liveMargin.left+liveMargin.right)
+  .attr("height",liveHeight+liveMargin.top+liveMargin.bottom)
+  .style("background", "#fff");
+const liveG = liveSvg.append("g")
+  .attr("transform",`translate(${liveMargin.left},${liveMargin.top})`);
+liveG.append("rect").attr("class","zoom-rect")
+     .attr("width",liveWidth).attr("height",liveHeight)
+     .attr("fill", "#fff");
+
+let xScaleLive=d3.scaleTime().range([0,liveWidth]),
+    yScaleLive=d3.scaleLinear().range([liveHeight,0]);
+const xAxisLive = liveG.append("g").attr("transform",`translate(0,${liveHeight})`);
+const yAxisLive = liveG.append("g");
+const liveAreaPositivePath = liveG.append("path")
+  .attr("fill","steelblue").attr("opacity",0.5).style("pointer-events","none");
+const liveAreaNegativePath = liveG.append("path")
+  .attr("fill","green").attr("opacity",0.5).style("pointer-events","none");
+const liveLinePath = liveG.append("path")
+  .attr("stroke","black").attr("stroke-width",1).attr("fill","none");
+const liveAvgLinePath = liveG.append("line")
+  .attr("stroke","red").attr("stroke-width",2).style("pointer-events","none");
+const liveZeroLine = liveG.append("line")
+  .attr("stroke","#999").attr("stroke-dasharray","4 2").style("pointer-events","none");
+const livePointsG = liveG.append("g").attr("class","hit-layer");
+const liveBrush = d3.brushX().extent([[0,0],[liveWidth,liveHeight]]).on("end",liveBrushed);
+const liveBrushG = liveG.append("g").attr("class","brush").call(liveBrush);
+
+function updateLiveChart(){
+  if(!liveData.length) return;
+  const domainStart = currentLiveDomain ? currentLiveDomain[0] : d3.min(liveData,d=>d.time);
+  const domainEnd   = currentLiveDomain ? currentLiveDomain[1] : d3.max(liveData,d=>d.time);
+  xScaleLive.domain([domainStart,domainEnd]);
+  let agg = aggregateData(liveData,domainStart,domainEnd,200);
+  agg = addZeroIntersections(agg);
+  yScaleLive.domain([Math.min(0,d3.min(agg,d=>d.value)),d3.max(agg,d=>d.value)]);
+  xAxisLive.call(d3.axisBottom(xScaleLive).tickFormat(d3.timeFormat("%d.%m.%Y %H:%M")))
+           .selectAll("text").attr("transform","rotate(-45)").style("text-anchor","end");
+  yAxisLive.call(d3.axisLeft(yScaleLive).tickFormat(formatYAxisTick));
+  const areaPos = d3.area().defined(d=>d.value>=0)
+      .x(d=>xScaleLive(d.time)).y0(yScaleLive(0)).y1(d=>yScaleLive(d.value));
+  const areaNeg = d3.area().defined(d=>d.value<=0)
+      .x(d=>xScaleLive(d.time)).y0(yScaleLive(0)).y1(d=>yScaleLive(d.value));
+  liveAreaPositivePath.datum(agg).attr("d",areaPos);
+  liveAreaNegativePath.datum(agg).attr("d",areaNeg);
+  liveLinePath.datum(agg)
+    .attr("d",d3.line().x(d=>xScaleLive(d.time)).y(d=>yScaleLive(d.value)));
+  const avg = d3.mean(agg,d=>d.value);
+  liveAvgLinePath.attr("x1",xScaleLive(domainStart)).attr("x2",xScaleLive(domainEnd))
+                 .attr("y1",yScaleLive(avg)).attr("y2",yScaleLive(avg));
+  liveZeroLine.attr("x1",xScaleLive(domainStart)).attr("x2",xScaleLive(domainEnd))
+              .attr("y1",yScaleLive(0)).attr("y2",yScaleLive(0));
+  const pts = livePointsG.selectAll("g.point")
+      .data(agg.filter(d=>d.rawValues?.length),d=>d.time.getTime());
+  pts.exit().remove();
+  const ptsEnter = pts.enter().append("g").attr("class","point");
+  ptsEnter.append("circle").attr("class","hit").attr("r",8).attr("fill","rgba(0,0,0,0)")
+    .on("mouseover",(e,d)=>showTooltip(e,`Leistung: ${d.value.toFixed(0)} W<br>${d3.timeFormat("%d.%m.%Y %H:%M")(d.time)}`))
+    .on("mousemove",e=>tooltip.style("left",(e.pageX+10)+"px").style("top",(e.pageY+10)+"px"))
+    .on("mouseout",hideTooltip);
+  ptsEnter.append("circle").attr("class","visible").attr("r",2.5).attr("fill","blue");
+  const ptsMerge = ptsEnter.merge(pts);
+  ptsMerge.select("circle.hit")
+    .attr("cx",d=>xScaleLive(d.time)).attr("cy",d=>yScaleLive(d.value));
+  ptsMerge.select("circle.visible")
+    .attr("cx",d=>xScaleLive(d.time)).attr("cy",d=>yScaleLive(d.value));
+  livePointsG.raise();
+
+  let min = '-', max = '-', avgText = '-';
+  if(agg.length > 0){
+    min = d3.min(agg, d=>d.value);
+    max = d3.max(agg, d=>d.value);
+    avgText = d3.mean(agg, d=>d.value);
+    if(min !== undefined) min = Math.round(min);
+    if(max !== undefined) max = Math.round(max);
+    if(avgText !== undefined) avgText = Math.round(avgText);
+  }
+  document.getElementById('liveMax').textContent = `Maximaler Leistungswert: ${max} W`;
+  document.getElementById('liveMin').textContent = `Minimaler Leistungswert: ${min} W`;
+  document.getElementById('liveAvg').textContent = `Durchschnittliche Leistung: ${avgText} W`;
+}
+function liveBrushed({selection}){
+  if(!selection) return;
+  currentLiveDomain = [xScaleLive.invert(selection[0]),xScaleLive.invert(selection[1])];
+  updateLiveChart(); liveBrushG.call(liveBrush.move,null);
+  document.getElementById("resetZoomLive").classList.add("active");
+}
+
+async function loadLiveData(){
+  try{
+    if(!selectedDeviceId){
+      document.getElementById("currentPower").textContent = "Bitte wählen Sie ein Gerät aus!";
+      return;
+    }
+    const d = await fetch(`https://backend.powerfox.energy/api/2.0/my/${selectedDeviceId}/current`, { headers: AUTH_HEADER() });
+    if(d.status === 401 || d.status === 403) {
+      localStorage.removeItem('credentials');
+      window.location.href = "index.html";
+      return;
+    }
+    if(!d.ok) throw new Error(d.statusText);
+    const json = await d.json();
+    const ts = new Date(json.Timestamp*1000);
+    const val = json.Watt;
+    document.getElementById("currentPower").textContent =
+      `Aktuelle Leistung: ${val} W (${ts.toLocaleString('de-DE')})`;
+    if(!liveData.length || liveData[liveData.length-1].time.getTime()!==ts.getTime()){
+      liveData.push({time:ts,value:val});
+      updateLiveChart();
+    }
+  }catch(e){
+    document.getElementById("currentPower").textContent = "Fehler beim Laden der Live-Daten!";
+    console.error("Live-Daten-Fehler:",e);
+  }
+}
+
+/* Historische Leistungswerte, Dropzones, usw. - unverändert ... (dein bestehender Code bleibt gleich) */
+
+const csvMargin={top:20,right:20,bottom:80,left:50},
+      csvWidth =960-csvMargin.left-csvMargin.right,
+      csvHeight=500-csvMargin.top-csvMargin.bottom;
+const csvSvg=d3.select("#csvChart")
+  .attr("width",csvWidth+csvMargin.left+csvMargin.right)
+  .attr("height",csvHeight+csvMargin.top+csvMargin.bottom)
+  .style("background", "#fff");
+const csvG=csvSvg.append("g").attr("transform",`translate(${csvMargin.left},${csvMargin.top})`);
+csvG.append("rect").attr("class","zoom-rect")
+     .attr("width",csvWidth).attr("height",csvHeight)
+     .attr("fill", "#fff");
+
+let xScaleCSV=d3.scaleTime().range([0,csvWidth]),
+    yScaleCSV=d3.scaleLinear().range([csvHeight,0]);
+const xAxisCSV=csvG.append("g").attr("transform",`translate(0,${csvHeight})`);
+const yAxisCSV=csvG.append("g");
+const csvDayLineG = csvG.append("g").attr("class","day-lines");
+const csvAreaG = csvG.append("g").attr("class","areas");
+const csvAreaPositivePath = csvAreaG.append("path").attr("fill","steelblue").attr("opacity",0.5);
+const csvAreaNegativePath = csvAreaG.append("path").attr("fill","green").attr("opacity",0.5);
+const csvLinePath = csvG.append("path").attr("stroke","black").attr("stroke-width",1).attr("fill","none");
+const csvAvgLinePath = csvG.append("line").attr("stroke","red").attr("stroke-width",2);
+const csvZeroLine = csvG.append("line").attr("stroke","#999").attr("stroke-dasharray","4 2");
+const csvBrush = d3.brushX().extent([[0,0],[csvWidth,csvHeight]]).on("end",csvBrushed);
+const csvBrushG = csvG.append("g").attr("class","brush").call(csvBrush);
+const csvPointsG   = csvG.append("g").attr("class","hit-layer");
+
+function updateCSVChart(){
+  if(!allData.length) return;
+  const domainStart = currentCSVDomain ? currentCSVDomain[0] : d3.min(allData,d=>d.time);
+  const domainEnd   = currentCSVDomain ? currentCSVDomain[1] : d3.max(allData,d=>d.time);
+  xScaleCSV.domain([domainStart,domainEnd]);
+  aggregatedDataCSV = aggregateData(allData,domainStart,domainEnd,200);
+  aggregatedDataCSV = addZeroIntersections(aggregatedDataCSV);
+  yScaleCSV.domain([Math.min(0,d3.min(aggregatedDataCSV,d=>d.value)),d3.max(aggregatedDataCSV,d=>d.value)]);
+  xAxisCSV.call(d3.axisBottom(xScaleCSV).tickFormat(d3.timeFormat("%d.%m.%Y %H:%M")))
+          .selectAll("text").attr("transform","rotate(-45)").style("text-anchor","end");
+  yAxisCSV.call(d3.axisLeft(yScaleCSV).tickFormat(formatYAxisTick));
+  const areaPos=d3.area().defined(d=>d.value>=0)
+     .x(d=>xScaleCSV(d.time)).y0(yScaleCSV(0)).y1(d=>yScaleCSV(d.value));
+  const areaNeg=d3.area().defined(d=>d.value<=0)
+     .x(d=>xScaleCSV(d.time)).y0(yScaleCSV(0)).y1(d=>yScaleCSV(d.value));
+  csvAreaPositivePath.datum(aggregatedDataCSV).attr("d",areaPos);
+  csvAreaNegativePath.datum(aggregatedDataCSV).attr("d",areaNeg);
+  csvLinePath.datum(aggregatedDataCSV)
+    .attr("d",d3.line().x(d=>xScaleCSV(d.time)).y(d=>yScaleCSV(d.value)));
+  const avg=d3.mean(aggregatedDataCSV,d=>d.value);
+  csvAvgLinePath.attr("x1",xScaleCSV(domainStart)).attr("x2",xScaleCSV(domainEnd))
+                .attr("y1",yScaleCSV(avg)).attr("y2",yScaleCSV(avg));
+  csvZeroLine.attr("x1",xScaleCSV(domainStart)).attr("x2",xScaleCSV(domainEnd))
+             .attr("y1",yScaleCSV(0)).attr("y2",yScaleCSV(0));
+  drawMidnightLines(domainStart,domainEnd);
+  const inter = aggregatedDataCSV.filter(d=>d.rawValues&&d.rawValues.length);
+  const pG = csvPointsG.selectAll("g.point").data(inter,d=>d.time.getTime());
+  pG.exit().remove();
+  const pEnter = pG.enter().append("g").attr("class","point");
+  pEnter.append("circle").attr("class","hit").attr("r",8).attr("fill","rgba(0,0,0,0)")
+    .on("mouseover",(e,d)=>showTooltip(e,`Leistung: ${d.value.toFixed(0)} W<br>${d3.timeFormat("%d.%m.%Y %H:%M")(d.time)}`))
+    .on("mousemove",e=>tooltip.style("left",(e.pageX+10)+"px").style("top",(e.pageY+10)+"px"))
+    .on("mouseout",hideTooltip);
+  pEnter.append("circle").attr("class","visible").attr("r",2.5).attr("fill","blue");
+  const pMerge=pEnter.merge(pG);
+  pMerge.select("circle.hit")
+        .attr("cx",d=>xScaleCSV(d.time)).attr("cy",d=>yScaleCSV(d.value));
+  pMerge.select("circle.visible")
+        .attr("cx",d=>xScaleCSV(d.time)).attr("cy",d=>yScaleCSV(d.value));
+  csvPointsG.raise();
+  document.getElementById("avgDisplay").textContent = "Durchschnitt: Ø " + (avg !== undefined ? Math.round(avg) : '-') + " W";
+  const energy = computeEnergyIntegrals(domainStart,domainEnd);
+  document.getElementById("energyDisplay").innerHTML =
+    `<p>Aggregierte Energiemenge Bezug: ${energy.consumption.toFixed(3)} kWh</p>
+     <p>Aggregierte Energiemenge Einspeisung: ${energy.injection.toFixed(3)} kWh</p>`;
+}
+function csvBrushed({selection}){
+  if(!selection) return;
+  currentCSVDomain=[xScaleCSV.invert(selection[0]),xScaleCSV.invert(selection[1])];
+  updateCSVChart(); csvBrushG.call(csvBrush.move,null);
+  document.getElementById("resetZoomCSV").classList.add("active");
+}
+function drawMidnightLines(start,end){
+  const s=new Date(start); s.setHours(0,0,0,0);
+  const e=new Date(end);   e.setHours(0,0,0,0);
+  const dates=[];
+  for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1)) dates.push(new Date(d));
+  const lines=csvDayLineG.selectAll("line.midnight").data(dates,d=>d.getTime());
+  lines.enter().append("line").attr("class","midnight").merge(lines)
+       .attr("x1",d=>xScaleCSV(d)).attr("x2",d=>xScaleCSV(d))
+       .attr("y1",0).attr("y2",csvHeight).attr("stroke","#aaa").attr("stroke-dasharray","2,2");
+  lines.exit().remove();
+}
+
+/* CSV/Download/Dropzone usw.: UNVERÄNDERT ... */
+
+/* Buttons und Logout */
+document.getElementById("btnLoadHistorical").onclick = async function() {
+  if (!selectedDeviceId) {
+    alert("Kein Gerät ausgewählt.");
+    return;
+  }
+  const url = `https://backend.powerfox.energy/api/2.0/my/${selectedDeviceId}/operatingcsv`;
+  try {
+    const res = await fetch(url, { headers: AUTH_HEADER() });
+    if(res.status === 401 || res.status === 403) {
+      localStorage.removeItem('credentials');
+      window.location.href = "index.html";
+      return;
+    }
+    if (!res.ok) throw new Error(res.statusText);
+
+    const blob = await res.blob();
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const csvText = e.target.result;
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: ";",
+        complete: function(res) {
+          if (!res.data.length) {
+            alert("Keine historischen Daten vorhanden.");
+            return;
+          }
+          const row = res.data[0];
+          const wattKey = Object.keys(row).find(k => k.trim().toLowerCase() === "watt");
+          const zeitKey = Object.keys(row).find(k => k.toLowerCase().includes("zeitpunkt"));
+          if (!wattKey || !zeitKey) {
+            alert("Falsches Format – Datei muss 'Zeitpunkt...' und 'Watt' enthalten.");
+            return;
+          }
+          allData = res.data.map(d => ({
+            time: new Date(d[zeitKey]),
+            value: parseFloat((d[wattKey] || "").replace(",", "."))
+          })).sort((a, b) => a.time - b.time);
+          currentCSVDomain = null;
+          updateCSVChart();
+        }
+      });
+    };
+    reader.readAsText(blob, "UTF-16LE");
+  } catch (e) {
+    alert("Fehler beim Laden der historischen Leistungswerte: " + e.message);
+  }
+};
+
+(function initDropZone(){
+  const dz=document.getElementById("dropZone");
+  dz.addEventListener("dragover",e=>{
+    e.preventDefault();dz.classList.add("dragover");
+  });
+  dz.addEventListener("dragleave",()=>dz.classList.remove("dragover"));
+  dz.addEventListener("drop",e=>{
+    e.preventDefault();dz.classList.remove("dragover");
+    if(e.dataTransfer.files.length) readCSVFile(e.dataTransfer.files[0]);
+  });
+  dz.addEventListener("click",()=>document.getElementById("csvFileInput").click());
+  document.getElementById("csvFileInput").addEventListener("change",e=>{
+    if(e.target.files[0]) readCSVFile(e.target.files[0]);
+  });
+})();
+function readCSVFile(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    Papa.parse(e.target.result,{
+      header:true,skipEmptyLines:true,complete:res=>{
+        if(!res.data.length){alert("Datei enthält keine Daten.");return;}
+        if(!("Watt" in res.data[0] && "Zeitpunkt (UTC nach ISO 8601)" in res.data[0])){
+          alert("Falsches Format – Spalten 'Watt' & 'Zeitpunkt (UTC nach ISO 8601)' erwartet.");return;
+        }
+        allData=res.data.map(d=>({time:new Date(d["Zeitpunkt (UTC nach ISO 8601)"]),
+                                  value:parseFloat(d.Watt.replace(",","."))}))
+                        .sort((a,b)=>a.time-b.time);
+        currentCSVDomain=null;updateCSVChart();
+      }
+    });
+  };
+  r.readAsText(file,"UTF-16LE");
+}
+
+function computeEnergyIntegrals(s,e){
+  const seg=allData.filter(d=>d.time>=s&&d.time<=e);
+  if(seg.length<2) return{consumption:0,injection:0};
+  let cons=0,inj=0;
+  for(let i=0;i<seg.length-1;i++){
+    const p=seg[i].value,dt=(seg[i+1].time-seg[i].time)/1000;
+    const kWh=(p*dt)/3600000;
+    if(p>0) cons+=kWh; else if(p<0) inj+=Math.abs(kWh);
+  }
+  return{consumption:cons,injection:inj};
+}
+
+document.getElementById("downloadButton").onclick=async()=>{
+  if(!selectedDeviceId){alert("Kein Gerät ausgewählt.");return;}
+  const url=`https://backend.powerfox.energy/api/2.0/my/${selectedDeviceId}/operatingcsv`;
+  try{
+    const res=await fetch(url,{headers:AUTH_HEADER()});
+    if(res.status === 401 || res.status === 403) {
+      localStorage.removeItem('credentials');
+      window.location.href = "index.html";
+      return;
+    }
+    if(!res.ok) throw new Error(res.statusText);
+    const blob=await res.blob();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);a.download="leistungswerte.csv";
+    document.body.appendChild(a);a.click();a.remove();
+    URL.revokeObjectURL(a.href);
+  }catch(e){alert("Download-Fehler: "+e.message);}
+};
+
+/* Reset-Buttons */
+document.getElementById("resetZoomLive").onclick=()=>{
+  currentLiveDomain=null;updateLiveChart();
+  document.getElementById("resetZoomLive").classList.remove("active");
+};
+document.getElementById("resetZoomCSV").onclick=()=>{
+  currentCSVDomain=null;updateCSVChart();
+  document.getElementById("resetZoomCSV").classList.remove("active");
+};
+
+/* Logout-Button */
+document.getElementById("logoutBtn").onclick=()=>{
+  localStorage.removeItem('credentials');
+  window.location.href = "index.html";
+};
+
+/* Seite initialisieren: Geräte laden, Polling starten */
+(async function(){
+  await loadDevices();
+  if(selectedDeviceId){
+    await loadLiveData();
+    setInterval(loadLiveData,3000);
+  }
+})();
+
+/* Navigation zu Energie-Seite */
+document.getElementById("toenergie").addEventListener('click', ()=> location.href='powerfox_energie.html');
+</script>
+</body>
+</html>
+

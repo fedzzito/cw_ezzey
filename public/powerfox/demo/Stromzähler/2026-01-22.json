@@ -1,0 +1,504 @@
+{
+  "Consumption": {
+    "StartTime": 1769040000,
+    "StartTimeCurrency": 9223372036854776000,
+    "Sum": 2.699,
+    "Max": 0.402,
+    "MaxCurrency": 0,
+    "MeterReadings": [],
+    "ReportValues": [
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769122800,
+        "Complete": true,
+        "Delta": 0.172,
+        "DeltaHT": 0,
+        "DeltaNT": 0.172,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769119200,
+        "Complete": true,
+        "Delta": 0.205,
+        "DeltaHT": 0,
+        "DeltaNT": 0.205,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769115600,
+        "Complete": true,
+        "Delta": 0.294,
+        "DeltaHT": 0,
+        "DeltaNT": 0.294,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769112000,
+        "Complete": true,
+        "Delta": 0.245,
+        "DeltaHT": 0.245,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769108400,
+        "Complete": true,
+        "Delta": 0.046,
+        "DeltaHT": 0.046,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769104800,
+        "Complete": true,
+        "Delta": 0.008,
+        "DeltaHT": 0.008,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769101200,
+        "Complete": true,
+        "Delta": 0.047,
+        "DeltaHT": 0.047,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769097600,
+        "Complete": true,
+        "Delta": 0.02,
+        "DeltaHT": 0.02,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769094000,
+        "Complete": true,
+        "Delta": 0.041,
+        "DeltaHT": 0.041,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769090400,
+        "Complete": true,
+        "Delta": 0.003,
+        "DeltaHT": 0.003,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769086800,
+        "Complete": true,
+        "Delta": 0.001,
+        "DeltaHT": 0.001,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769083200,
+        "Complete": true,
+        "Delta": 0.048,
+        "DeltaHT": 0.048,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769079600,
+        "Complete": true,
+        "Delta": 0.001,
+        "DeltaHT": 0.001,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769076000,
+        "Complete": true,
+        "Delta": 0.005,
+        "DeltaHT": 0.005,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769072400,
+        "Complete": true,
+        "Delta": 0.106,
+        "DeltaHT": 0.106,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769068800,
+        "Complete": true,
+        "Delta": 0.02,
+        "DeltaHT": 0.02,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769065200,
+        "Complete": true,
+        "Delta": 0.231,
+        "DeltaHT": 0.231,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769061600,
+        "Complete": true,
+        "Delta": 0.402,
+        "DeltaHT": 0.402,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769058000,
+        "Complete": true,
+        "Delta": 0.157,
+        "DeltaHT": 0.157,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769054400,
+        "Complete": true,
+        "Delta": 0.131,
+        "DeltaHT": 0,
+        "DeltaNT": 0.131,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769050800,
+        "Complete": true,
+        "Delta": 0.134,
+        "DeltaHT": 0,
+        "DeltaNT": 0.134,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769047200,
+        "Complete": true,
+        "Delta": 0.127,
+        "DeltaHT": 0,
+        "DeltaNT": 0.127,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769043600,
+        "Complete": true,
+        "Delta": 0.135,
+        "DeltaHT": 0,
+        "DeltaNT": 0.135,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769040000,
+        "Complete": true,
+        "Delta": 0.12,
+        "DeltaHT": 0,
+        "DeltaNT": 0.12,
+        "DeltaCurrency": 0,
+        "ValuesType": 1
+      }
+    ],
+    "SumCurrency": 0
+  },
+  "FeedIn": {
+    "StartTime": 1769040000,
+    "StartTimeCurrency": 9223372036854776000,
+    "Sum": 0.352,
+    "Max": 0.084,
+    "MaxCurrency": 0,
+    "MeterReadings": [],
+    "ReportValues": [
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769122800,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769119200,
+        "Complete": true,
+        "Delta": 0.001,
+        "DeltaHT": 0,
+        "DeltaNT": 0.001,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769115600,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769112000,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769108400,
+        "Complete": true,
+        "Delta": 0.003,
+        "DeltaHT": 0.003,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769104800,
+        "Complete": true,
+        "Delta": 0.005,
+        "DeltaHT": 0.005,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769101200,
+        "Complete": true,
+        "Delta": 0.004,
+        "DeltaHT": 0.004,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769097600,
+        "Complete": true,
+        "Delta": 0.013,
+        "DeltaHT": 0.013,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769094000,
+        "Complete": true,
+        "Delta": 0.009,
+        "DeltaHT": 0.009,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769090400,
+        "Complete": true,
+        "Delta": 0.014,
+        "DeltaHT": 0.014,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769086800,
+        "Complete": true,
+        "Delta": 0.048,
+        "DeltaHT": 0.048,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769083200,
+        "Complete": true,
+        "Delta": 0.069,
+        "DeltaHT": 0.069,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769079600,
+        "Complete": true,
+        "Delta": 0.084,
+        "DeltaHT": 0.084,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769076000,
+        "Complete": true,
+        "Delta": 0.047,
+        "DeltaHT": 0.047,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769072400,
+        "Complete": true,
+        "Delta": 0.035,
+        "DeltaHT": 0.035,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769068800,
+        "Complete": true,
+        "Delta": 0.019,
+        "DeltaHT": 0.019,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769065200,
+        "Complete": true,
+        "Delta": 0.001,
+        "DeltaHT": 0.001,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769061600,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769058000,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769054400,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769050800,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769047200,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769043600,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      },
+      {
+        "DeviceId": "Stromzähler",
+        "Timestamp": 1769040000,
+        "Complete": true,
+        "Delta": 0,
+        "DeltaHT": 0,
+        "DeltaNT": 0,
+        "DeltaCurrency": 0,
+        "ValuesType": 2
+      }
+    ],
+    "SumCurrency": 0
+  }
+}

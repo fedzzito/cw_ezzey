@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>powerfox Energiedaten Analyse</title>
+
+  <!-- zentrale, einheitliche Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <header class="site-header" role="banner" aria-label="Seitenkopf">
+      <h1>powerfox Energiedaten Analyse</h1>
+      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+    </header>
+
+    <!-- Main content container -->
+    <main class="container" role="main">
+
+      <!-- Login + Hinweis (cards grid for compact layout) -->
+      <section class="cards" aria-label="Login und Hinweis">
+        <form id="loginForm" class="card" autocomplete="off" aria-label="Login Formular">
+          <div>
+            <label for="email">E‑Mail</label>
+            <input id="email" type="email" name="email" required autocomplete="username" />
+          </div>
+          <div>
+            <label for="password">Passwort</label>
+            <input id="password" type="password" name="password" required autocomplete="current-password" />
+          </div>
+          <div style="display:flex;gap:12px;margin-top:12px;">
+            <button id="loginFormBtn" class="btn" type="submit">Einloggen</button>
+            <button id="loginAsGuest" class="btn" type="button" aria-hidden="true" style="display:none;">Gast</button>
+            <button id="demoBtn" class="btn" type="button">Demo starten</button>
+          </div>
+        </form>
+
+        <aside id="hintCard" class="card" aria-label="Hinweis">
+          <h3>Hinweis</h3>
+          <p class="kv">Deine Login-Daten werden nicht an Dritte weitergegeben. Sie werden lokal verwendet, um die powerfox API zu erreichen und Geräte/Daten für die Visualisierung zu laden.</p>
+        </aside>
+      </section>
+
+      <!-- Navigation Kacheln -->
+      <section class="cards" aria-label="Tools">
+        <a href="powerfox_energie.html" class="card" id="energiedatenKachel" role="button" tabindex="0" aria-pressed="false">
+          <h3>Energiedaten</h3>
+          <p class="kv">Visualisiere deine Energiedaten</p>
+        </a>
+
+        <a href="powerfox_leistung.html" class="card" id="leistungswertKachel" role="button" tabindex="0" aria-pressed="false">
+          <h3>Leistungswerte</h3>
+          <p class="kv">Analysiere aktuellen Verbrauch und historische Leistungswerte</p>
+        </a>
+      </section>
+    </main>
+
+    <!--paypal donate kept as global CTA (styled by CSS) -->
+    <div class="paypal-donate" aria-hidden="false">
+      <form action="https://www.paypal.com/donate" method="post" target="_blank" style="display:inline-block;padding:8px;">
+        <input type="hidden" name="business" value="fedzzito@gmail.com">
+        <input type="hidden" name="currency_code" value="EUR">
+        <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
+      </form>
+    </div>
+
+  </div>
+
+  <script>
+    // Vollständige Login/Logout/Navigations-Funktionen erhalten.
+    // Login speichert credentials + devices in localStorage, wie bisher.
+    const loginForm = document.getElementById('loginForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const energiedatenKachel = document.getElementById('energiedatenKachel');
+    const leistungswertKachel = document.getElementById('leistungswertKachel');
+    const hintCard = document.getElementById('hintCard');
+
+    // Helper: update UI based on presence of credentials
+    function refreshAuthUI(){
+      const creds = localStorage.getItem('credentials');
+      if(creds){
+        // hide login form and hint if credentials available
+        loginForm.style.display = 'none';
+        if(hintCard) hintCard.style.display = 'none';
+        logoutBtn.style.display = 'inline-flex';
+      } else {
+        loginForm.style.display = 'block';
+        if(hintCard) hintCard.style.display = 'block';
+        logoutBtn.style.display = 'none';
+      }
+    }
+
+    // Initialize UI
+    refreshAuthUI();
+
+    // Login handler - behavior unchanged
+    loginForm.addEventListener('submit', async function(event){
+      event.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if(!email || !password){ alert('Bitte E‑Mail und Passwort eingeben.'); return; }
+      const credentials = btoa(`${email}:${password}`);
+      try{
+        const res = await fetch('https://backend.powerfox.energy/api/2.0/my/all/devices', {
+          headers: { 'Authorization': `Basic ${credentials}` }
+        });
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        const devices = await res.json();
+        // store credentials and devices locally (other pages rely on these keys)
+        localStorage.setItem('credentials', credentials);
+        localStorage.setItem('devices', JSON.stringify(devices));
+        // update UI: hide login and hint as requested
+        refreshAuthUI();
+        console.log('Login erfolgreich, Geräte:', devices);
+        // optional: navigate to energia page after login if devices exist
+        // if(devices && devices.length) location.href = 'powerfox_energie.html';
+      }catch(err){
+        console.error('Login fehlgeschlagen:', err);
+        alert('Login fehlgeschlagen. Bitte Zugangsdaten prüfen.');
+      }
+    });
+
+    // Logout - behavior unchanged
+    logoutBtn.addEventListener('click', function(){
+      localStorage.removeItem('credentials');
+      localStorage.removeItem('devices');
+      refreshAuthUI();
+      // reload to ensure other pages pick up the change if opened
+      location.reload();
+    });
+
+    // Demo mode
+    document.getElementById('demoBtn').addEventListener('click', function(){
+      localStorage.setItem('demoMode', '1');
+      localStorage.removeItem('credentials');
+      localStorage.removeItem('devices');
+      location.href = 'powerfox_htnt.html';
+    });
+
+    // Kachel navigation (click and keyboard activation)
+    energiedatenKachel.addEventListener('click', ()=> location.href = 'powerfox_energie.html');
+    leistungswertKachel.addEventListener('click', ()=> location.href = 'powerfox_leistung.html');
+
+    [energiedatenKachel, leistungswertKachel].forEach(el=>{
+      el.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter' || e.key === ' '){
+          e.preventDefault();
+          el.click();
+        }
+      });
+    });
+
+    // On page load, if credentials exist but devices not loaded, try to fetch devices quietly
+    (async function prefetchDevicesIfMissing(){
+      const creds = localStorage.getItem('credentials');
+      if(!creds) return;
+      const devicesStored = localStorage.getItem('devices');
+      if(devicesStored) return; // nothing to do
+      try{
+        const res = await fetch('https://backend.powerfox.energy/api/2.0/my/all/devices', {
+          headers: { 'Authorization': `Basic ${creds}` }
+        });
+        if(res.ok){
+          const devices = await res.json();
+          localStorage.setItem('devices', JSON.stringify(devices));
+          console.debug('Devices preloaded.');
+        } else {
+          console.debug('Prefetch devices failed, status', res.status);
+        }
+      }catch(e){
+        console.debug('Prefetch devices error', e);
+      }
+    })();
+  </script>
+</body>
+</html>

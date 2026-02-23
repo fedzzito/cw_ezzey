@@ -1,0 +1,967 @@
+<!-- powerfox_htnt.html
+     Zweck:
+     - HT/NT-Auswertung wie powerfox_energie, aber OHNE Vergleichsfunktion
+     - Balkendiagramm: gestapelt (NT unten braun, HT oben blau wie main blau)
+     - Datentabelle + CSV-Export angepasst auf HT/NT
+     - Restliches Verhalten (Login/Creds, Geräte laden, Rollpicker, Tooltip, Tabelle ein-/ausblenden, Logout, Buttons) wie powerfox_energie
+-->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HT/NT-Dashboard für deinen poweropti</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .spinner{ width:18px; height:18px; border-radius:50%; border:3px solid #e6eef6; border-top-color:var(--primary, #0070ba); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle;}
+    @keyframes spin{ to { transform:rotate(360deg); } }
+    #chart { height: 460px; display:block; }
+    .rollpicker-inline { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+    .picker-set { display:flex; gap:8px; align-items:center; border:1px solid #e6eef6; border-radius:10px; padding:8px 12px; background:#f8fafc; min-width:300px; }
+    .picker-group { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+    .picker-label { font-size:13px; color:var(--muted); font-weight:600; }
+    .picker-roll-container { display:flex; align-items:center; gap:4px; }
+    .picker-roll { max-height:120px; overflow-y:hidden; display:flex; flex-direction:column; align-items:center; border-radius:8px; border:1px solid rgba(0,0,0,0.08); background:transparent; padding:4px 6px; }
+    .picker-item{ display:inline-flex; align-items:center; justify-content:center; padding:5px 10px; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; font-weight:600; white-space:nowrap; border:0; }
+    .picker-item.placeholder{ opacity:0.25; cursor:default; }
+    .picker-item.selected{ background:var(--primary); color:#fff; box-shadow: 0 6px 20px rgba(2,112,170,0.15); transform:translateY(-1px); border:none; }
+    .picker-arrow { width:24px; height:24px; border:none; background:transparent; font-size:16px; color:#888; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .picker-add { margin-left:6px; }
+    .picker-remove { background:transparent; border:1px solid rgba(0,0,0,0.08); color:var(--danger); border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+    .data-grid { width:100%; border-collapse:collapse; }
+    .data-grid th, .data-grid td { border:1px solid #e6eef6; padding:8px 10px; text-align:left; }
+    .data-grid thead th { background:#f8fafc; font-weight:700; color:var(--text); }
+    #rollpicker-container.card { padding:12px; }
+
+    /* Tooltip Text sichtbar machen */
+    .tooltip {
+      position:absolute;
+      display:none;
+      pointer-events:none;
+      background:#fff;
+      border:1px solid #ccc;
+      padding:6px;
+      border-radius:4px;
+      font-size:13px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.13);
+      z-index:9999;
+      color:#111;
+    }
+    .tooltip, .tooltip * { color:#111; }
+
+    .device-selection-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:0.75em; margin-top:1em; }
+    .device-left { display:flex; align-items:center; gap:10px; }
+    .device-left label { margin-right:7px; }
+    .device-left select { min-width:120px; }
+    .device-right { margin-left:auto; display:flex; align-items:center; justify-content:flex-end; flex:1 1 0%; gap:8px; }
+    .wechsel-btn { white-space:nowrap; }
+
+    /* Farben für HT/NT */
+    :root{
+      --ht-blue: #0070ba; /* wie pickerColors[0] */
+      --nt-brown: #8b5a2b; /* braun */
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="site-header" role="banner" aria-label="Seitenkopf">
+      <h1>HT/NT Energiedaten-Dashboard</h1>
+      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+    </header>
+
+    <main class="container" role="main">
+      <div class="paypal-donate" role="region" aria-label="Spenden und Feedback">
+        <form action="https://www.paypal.com/donate" method="post" target="_blank">
+          <input type="hidden" name="business" value="fedzzito@gmail.com">
+          <input type="hidden" name="currency_code" value="EUR">
+          <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
+        </form>
+      </div>
+
+      <div class="device-selection-row" role="region" aria-label="Geräteauswahl">
+        <div class="device-left">
+          <label for="devices">Gerät auswählen:</label>
+          <select id="devices"></select>
+        </div>
+        <div class="device-right">
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_csv.html'">
+            zu CSV-Download wechseln
+          </button>
+
+          <button class="wechsel-btn btn" type="button" onclick="window.open('https://ezzey.de/','_blank')">
+            ezzey.de
+          </button>
+
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_energie.html'">
+            zurück zu Energiedaten
+          </button>
+
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_leistung.html'">
+            zu Leistungswerten wechseln
+          </button>
+        </div>
+      </div>
+
+      <div id="rollpicker-container" class="card" aria-label="Datumsauswahl" style="margin-top:12px;"></div>
+
+      <div id="chart-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;">
+        <div id="title-container" style="display:flex;align-items:center;gap:10px;">
+          <div id="loading-indicator" class="spinner" style="visibility:hidden;"></div>
+          <h2 id="chart-title" style="margin:0">HT/NT Energiedaten</h2>
+        </div>
+      </div>
+
+      <div id="chart-container" class="chart-wrapper" style="margin-top:12px;">
+        <svg id="chart"></svg>
+      </div>
+
+      <div id="summary" style="margin-top:14px;"></div>
+
+      <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+        <button id="toggle-table" class="btn">Datentabelle laden</button>
+      </div>
+
+      <div id="table-container" style="display:none; margin-top:12px;"></div>
+      <div id="tooltip" class="tooltip"></div>
+    </main>
+  </div>
+
+<script>
+/* ==========================
+   Basis-Konstanten / DOM
+   ========================== */
+const apiUrl               = 'https://backend.powerfox.energy/api/2.0/my/';
+const devicesDropdown      = document.getElementById('devices');
+const chartSvg             = document.getElementById('chart');
+const tooltip              = document.getElementById('tooltip');
+const chartTitle           = document.getElementById('chart-title');
+const loadingIndicator     = document.getElementById('loading-indicator');
+const summaryDiv           = document.getElementById('summary');
+const toggleTableBtn       = document.getElementById('toggle-table');
+const tableContainer       = document.getElementById('table-container');
+const rollpickerContainer  = document.getElementById('rollpicker-container');
+const logoutBtn            = document.getElementById('logoutBtn');
+
+let selectedDevice = null;
+let isGasDevice = false; // HT/NT nur sinnvoll bei Strom (Division != 4), aber wir lassen UI nicht abstürzen
+
+const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const pad = n => n < 10 ? '0' + n : ''+n;
+
+const HT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--ht-blue').trim() || '#0070ba';
+const NT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--nt-brown').trim() || '#8b5a2b';
+
+let pickers = [{year:null, month:null, day:null, type:"main"}];
+let activePickerIndex = null;
+
+let lastTableDataMain = [];
+let lastChartAgg = { main: { ht: 0, nt: 0, total: 0 } };
+
+/* ==========================
+   Auth / Fetch
+   ========================== */
+function getCredentials(){ return localStorage.getItem('credentials'); }
+function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
+
+async function fetchJSON(url){
+  const creds = getCredentials();
+  if(!creds){ alert("Nicht angemeldet."); location.href="index.html"; throw new Error("no creds"); }
+  const res = await fetch(url,{headers: AUTH_HEADER()});
+  if(res.status===401||res.status===403){
+    localStorage.removeItem('credentials');
+    localStorage.removeItem('devices');
+    location.href="index.html";
+    throw new Error("auth");
+  }
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return res.json();
+}
+
+/* ==========================
+   Zeit-Helfer (Berlin)
+   ========================== */
+const BERLIN_TZ = 'Europe/Berlin';
+const dtfBerlin = new Intl.DateTimeFormat('de-DE', {
+  timeZone: BERLIN_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  hour12: false
+});
+
+function berlinPartsFromUtcTs(ts){
+  const parts = dtfBerlin.formatToParts(new Date(ts * 1000));
+  const obj = {};
+  for(const p of parts){
+    if(p.type !== 'literal') obj[p.type] = p.value;
+  }
+  return {
+    year: Number(obj.year),
+    month: Number(obj.month),
+    day: Number(obj.day),
+    hour: Number(obj.hour)
+  };
+}
+
+function formatBerlin(ts){
+  const p = berlinPartsFromUtcTs(ts);
+  return {
+    date: `${pad(p.day)}.${pad(p.month)}.${p.year}`,
+    time: `${pad(p.hour)}:00`
+  };
+}
+
+function sameBerlinDay(bp, y, m, d){
+  return bp.year===Number(y) && bp.month===Number(m) && bp.day===Number(d);
+}
+function sameBerlinMonth(bp, y, m){
+  return bp.year===Number(y) && bp.month===Number(m);
+}
+function sameBerlinYear(bp, y){
+  return bp.year===Number(y);
+}
+
+/* ==========================
+   Logout
+   ========================== */
+if(logoutBtn){
+  logoutBtn.addEventListener('click', function(){
+    localStorage.removeItem('credentials');
+    localStorage.removeItem('devices');
+    location.href = 'index.html';
+  });
+}
+
+/* ==========================
+   Rollpicker (wie powerfox_energie, ohne Vergleich)
+   ========================== */
+function setInitialPickerToToday(){
+  const nowTs = Math.floor(Date.now()/1000);
+  const p = berlinPartsFromUtcTs(nowTs);
+  pickers[0].year = p.year;
+  pickers[0].month = p.month;
+  pickers[0].day = p.day;
+}
+
+function buildRollPicker(){
+  rollpickerContainer.innerHTML = '';
+
+  const container = document.createElement('div');
+  container.className = 'rollpicker-inline';
+
+  function createRoll(values, selectedAbsIdx, setAbsValue, labelMap){
+    const rollWrap = document.createElement('div');
+    rollWrap.className = 'picker-roll-container';
+
+    let idxAbs = (selectedAbsIdx !== undefined && selectedAbsIdx !== null) ? selectedAbsIdx : 0;
+    if(idxAbs < 0) idxAbs = 0;
+    if(values && idxAbs > values.length - 1) idxAbs = values.length - 1;
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'picker-arrow';
+    upBtn.innerHTML = '&#9650;';
+    upBtn.type = 'button';
+    upBtn.onclick = () => {
+      if(!values || values.length===0) return;
+      if (idxAbs > 0) { idxAbs--; setAbsValue(idxAbs); }
+    };
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'picker-arrow';
+    downBtn.innerHTML = '&#9660;';
+    downBtn.type = 'button';
+    downBtn.onclick = () => {
+      if(!values || values.length===0) return;
+      if (idxAbs < values.length - 1) { idxAbs++; setAbsValue(idxAbs); }
+    };
+
+    rollWrap.appendChild(upBtn);
+
+    const roll = document.createElement('div');
+    roll.className = 'picker-roll';
+    roll.addEventListener('wheel', (e) => {
+      if(!values || values.length===0) return;
+      e.preventDefault();
+      if(e.deltaY > 0){
+        if (idxAbs < values.length - 1) { idxAbs++; setAbsValue(idxAbs); }
+      } else if(e.deltaY < 0){
+        if (idxAbs > 0) { idxAbs--; setAbsValue(idxAbs); }
+      }
+    }, { passive: false });
+
+    function renderWindow(){
+      roll.innerHTML = '';
+      if(!values || values.length===0){
+        for(let i=0;i<5;i++){
+          const ph = document.createElement('div');
+          ph.className = 'picker-item placeholder';
+          ph.innerText = '--';
+          roll.appendChild(ph);
+        }
+        return;
+      }
+      for(let offset = -2; offset <= 2; offset++){
+        const vidx = idxAbs + offset;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if(vidx < 0 || vidx >= values.length){
+          btn.className = 'picker-item placeholder';
+          btn.innerText = '';
+          btn.disabled = true;
+        } else {
+          btn.className = 'picker-item';
+          btn.innerText = labelMap ? (labelMap[values[vidx]] || values[vidx]) : values[vidx];
+          if(vidx === idxAbs) btn.classList.add('selected');
+          btn.onclick = (() => {
+            const clickIdx = vidx;
+            return () => setAbsValue(clickIdx);
+          })();
+        }
+        roll.appendChild(btn);
+      }
+    }
+
+    renderWindow();
+    rollWrap.appendChild(roll);
+    rollWrap.appendChild(downBtn);
+
+    return {el: rollWrap, refresh: renderWindow};
+  }
+
+  function createPickerSet(picker){
+    const set = document.createElement('div');
+    set.className = 'picker-set';
+
+    const years = [];
+    const currentYear = new Date().getFullYear();
+    for(let y=2019; y<=currentYear; y++) years.push(y);
+    let yearIdx = picker.year ? years.indexOf(Number(picker.year)) : 0;
+    if(yearIdx < 0) yearIdx = 0;
+
+    const yearGroup = document.createElement('div');
+    yearGroup.className = 'picker-group';
+    const yearLabel = document.createElement('div');
+    yearLabel.className = 'picker-label';
+    yearLabel.innerText = "Jahr";
+    yearGroup.appendChild(yearLabel);
+
+    const yearRollObj = createRoll(years, yearIdx, (newAbsIdx)=>{
+      picker.year = years[newAbsIdx]; picker.month = null; picker.day = null;
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, null);
+    yearGroup.appendChild(yearRollObj.el);
+    set.appendChild(yearGroup);
+
+    let months = picker.year ? Array.from({length:12},(_,i)=>i+1) : [];
+    let monthIdx = picker.month ? months.indexOf(Number(picker.month)) : 0;
+    if(monthIdx < 0) monthIdx = 0;
+
+    const monthGroup = document.createElement('div');
+    monthGroup.className = 'picker-group';
+    const monthLabel = document.createElement('div');
+    monthLabel.className = 'picker-label';
+    monthLabel.innerText = "Monat";
+    monthGroup.appendChild(monthLabel);
+
+    const monthNameMap = {};
+    months.forEach((m,i) => monthNameMap[m] = monthNames[i]);
+
+    const monthRollObj = createRoll(months, monthIdx, (newAbsIdx)=>{
+      picker.month = months[newAbsIdx]; picker.day = null;
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, monthNameMap);
+    monthGroup.appendChild(monthRollObj.el);
+    set.appendChild(monthGroup);
+
+    let days = [];
+    if(picker.year && picker.month){
+      const maxDay = new Date(picker.year, picker.month, 0).getDate();
+      days = Array.from({length:maxDay}, (_,i)=>i+1);
+    }
+    let dayIdx = picker.day ? days.indexOf(Number(picker.day)) : 0;
+    if(dayIdx < 0) dayIdx = 0;
+
+    const dayGroup = document.createElement('div');
+    dayGroup.className = 'picker-group';
+    const dayLabel = document.createElement('div');
+    dayLabel.className = 'picker-label';
+    dayLabel.innerText = "Tag";
+    dayGroup.appendChild(dayLabel);
+
+    const dayRollObj = createRoll(days, dayIdx, (newAbsIdx)=>{
+      picker.day = days[newAbsIdx];
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, null);
+    dayGroup.appendChild(dayRollObj.el);
+    set.appendChild(dayGroup);
+
+    return set;
+  }
+
+  container.appendChild(createPickerSet(pickers[0]));
+  rollpickerContainer.appendChild(container);
+}
+
+/* ==========================
+   Titel / Labels
+   ========================== */
+function periodLabelForPicker(p){
+  if(!p || !p.year) return '';
+  if(p.year && !p.month) return String(p.year);
+  if(p.year && p.month && !p.day) return `${monthNames[p.month-1]} ${p.year}`;
+  if(p.year && p.month && p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year}`;
+  return '';
+}
+
+function updateChartTitle(){
+  const mainLbl = periodLabelForPicker(pickers[0]);
+  let t = "HT/NT Energiedaten";
+  if(mainLbl) t += ` – ${mainLbl}`;
+  chartTitle.textContent = t;
+}
+
+/* ==========================
+   Tooltip stabil über Balken
+   ========================== */
+function showTooltipAtPageXY(pageX, pageY, html){
+  tooltip.innerHTML = html;
+  tooltip.style.left = `${Math.round(pageX)}px`;
+  tooltip.style.top  = `${Math.round(pageY)}px`;
+  tooltip.style.display = 'block';
+}
+function hideTooltip(){ tooltip.style.display = 'none'; }
+
+function placeTooltipAboveRect(rectEl, html){
+  if(!rectEl) return;
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+
+  const rect = rectEl.getBoundingClientRect();
+  const ttW = tooltip.offsetWidth || 0;
+  const ttH = tooltip.offsetHeight || 0;
+
+  let left = rect.left + window.scrollX + rect.width/2 - ttW/2;
+  let top  = rect.top + window.scrollY - ttH - 8;
+
+  const minLeft = window.scrollX + 6;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - ttW - 6;
+  left = Math.max(minLeft, Math.min(maxLeft, left));
+
+  if(top < window.scrollY + 6){
+    top = rect.bottom + window.scrollY + 8;
+  }
+
+  showTooltipAtPageXY(left, top, html);
+}
+
+function tooltipTimeLbl(lbl, picker){
+  const p = picker;
+  if(p.year && !p.month) return `${monthNames[lbl-1]} ${p.year}`;
+  if(p.month && !p.day) return `${pad(lbl)}.${pad(p.month)}.${p.year} (DE)`;
+  if(p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year} ${String(lbl)} (DE)`;
+  if(lbl instanceof Date){
+    return `${pad(lbl.getDate())}.${pad(lbl.getMonth()+1)}.${lbl.getFullYear()} ${pad(lbl.getHours())}:00 (DE)`;
+  }
+  return String(lbl);
+}
+
+/* ==========================
+   Chart: HT/NT gestapelt
+   ========================== */
+function htValueFor(entry){
+  if(!entry) return 0;
+  // robust: je nach Backend-Property-Namen
+  return Number(entry.DeltaHT ?? entry.deltaHT ?? entry.DeltaHt ?? 0) || 0;
+}
+function ntValueFor(entry){
+  if(!entry) return 0;
+  return Number(entry.DeltaNT ?? entry.deltaNT ?? entry.DeltaNt ?? 0) || 0;
+}
+function totalValueFor(entry){
+  if(!entry) return 0;
+  // Falls Delta = gesamt existiert: nutzen, sonst ht+nt
+  const d = Number(entry.Delta ?? entry.delta ?? NaN);
+  if(Number.isFinite(d)) return d;
+  return htValueFor(entry) + ntValueFor(entry);
+}
+
+function renderChart(data1){
+  const svg = d3.select(chartSvg);
+  svg.selectAll("*").remove();
+
+  const margin={top:20,right:20,bottom:70,left:55};
+  const w=960 - margin.left - margin.right;
+  const h=460 - margin.top - margin.bottom;
+
+  // Nur Consumption ist relevant
+  const cons = data1?.Consumption?.ReportValues || [];
+
+  // Falls Gas-Gerät: freundlich abfangen (kein HT/NT)
+  if(isGasDevice){
+    const g = svg
+      .attr('width',  w + margin.left + margin.right)
+      .attr('height', h + margin.top  + margin.bottom)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    g.append('text')
+      .attr('x', 0).attr('y', 20)
+      .text('Dieses Gerät ist ein Gas-Gerät (keine HT/NT-Auswertung verfügbar).')
+      .style('font-weight','700');
+
+    summaryDiv.innerHTML = `<div class="kv">Keine HT/NT-Daten für Gas-Geräte.</div>`;
+    lastTableDataMain = [];
+    lastChartAgg = { main: { ht:0, nt:0, total:0 } };
+    if(tableContainer.style.display === 'block'){
+      tableContainer.innerHTML = `<div class="card" style="margin-top:12px;padding:12px;"><div class="kv">Keine HT/NT-Daten.</div></div>`;
+    }
+    return;
+  }
+
+  // X Labels & Map (wie powerfox_energie)
+  let xLabels=[];
+  const mainMap={};
+  const main = pickers[0];
+
+  if(main.year && !main.month){
+    xLabels = d3.range(1,13);
+    xLabels.forEach(m=>{
+      mainMap[m] = cons.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        return sameBerlinYear(bp, main.year) && bp.month===m;
+      }) || null;
+    });
+  } else if(main.year && main.month && !main.day){
+    const maxD = new Date(main.year, main.month, 0).getDate();
+    xLabels = d3.range(1, maxD+1);
+    xLabels.forEach(dy=>{
+      mainMap[dy] = cons.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        return sameBerlinMonth(bp, main.year, main.month) && bp.day===dy;
+      }) || null;
+    });
+  } else if(main.year && main.month && main.day){
+    const dayEntries = cons
+      .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
+      .filter(x => sameBerlinDay(x.bp, main.year, main.month, main.day))
+      .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
+
+    // 23/24/25 labels möglich
+    const labels = dayEntries.map(x => `${pad(x.bp.hour)}:00`);
+    xLabels = labels.map((lbl, idx) => ({lbl, idx}));
+
+    for(let i=0;i<dayEntries.length;i++){
+      mainMap[i] = dayEntries[i].e;
+    }
+  } else {
+    // Fallback: chronologisch
+    const times = cons.map(c=>c.Timestamp).sort((a,b)=>a-b);
+    xLabels = times;
+    const idxCons = new Map(cons.map(v => [v.Timestamp, v]));
+    xLabels.forEach(ts=> mainMap[ts] = idxCons.get(ts) || null);
+  }
+
+  function keyForDomain(d){
+    return (d && typeof d === 'object' && 'idx' in d) ? d.idx : d;
+  }
+
+  // yMax = max(HT+NT)
+  let yMax = 0;
+  for(const lbl of xLabels){
+    const key = keyForDomain(lbl);
+    const e = mainMap[key];
+    const v = htValueFor(e) + ntValueFor(e);
+    yMax = Math.max(yMax, v);
+  }
+  if(yMax <= 0) yMax = 0.001;
+
+  const y=d3.scaleLinear().domain([0,yMax]).range([h,0]);
+  const x=d3.scaleBand().domain(xLabels).range([0,w]).padding(0.18);
+
+  const g = svg
+    .attr('width',  w + margin.left + margin.right)
+    .attr('height', h + margin.top  + margin.bottom)
+    .append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Achsen
+  g.append('g').attr('transform',`translate(0,${h})`)
+    .call(d3.axisBottom(x).tickFormat(lbl=>{
+      if(lbl && typeof lbl === 'object' && 'lbl' in lbl) return lbl.lbl;
+      if(main.year && !main.month) return monthNames[lbl-1];
+      if(main.month && !main.day) return lbl+'.';
+      if(main.day) return String(lbl); // "HH:00"
+      if(typeof lbl === 'number'){
+        const bp = berlinPartsFromUtcTs(lbl);
+        return pad(bp.hour)+':00';
+      }
+      return lbl;
+    }))
+    .selectAll("text")
+    .style("text-anchor", "end")
+    .attr("dx", "-0.8em")
+    .attr("dy", "0.15em")
+    .attr("transform", "rotate(-50)");
+
+  g.append('g')
+    .call(d3.axisLeft(y).ticks(10).tickFormat(t=>t+' kWh'));
+
+  // Stacked Bars:
+  // - NT unten
+  // - HT oben drauf
+  const barW = x.bandwidth();
+
+  function tooltipHTML(timeLabel, ht, nt){
+    const total = ht+nt;
+    return `<b>HT/NT</b><br>${timeLabel}<br>`+
+           `NT: ${nt.toFixed(3)} kWh<br>`+
+           `HT: ${ht.toFixed(3)} kWh<br>`+
+           `<b>Summe: ${total.toFixed(3)} kWh</b>`;
+  }
+
+  // NT rects
+  g.selectAll('.bar-nt').data(xLabels).enter().append('rect')
+    .attr('class','bar-nt')
+    .attr('x',d=>x(d))
+    .attr('width',barW)
+    .attr('y',d=>{
+      const e = mainMap[keyForDomain(d)];
+      const nt = ntValueFor(e);
+      return y(nt);
+    })
+    .attr('height',d=>{
+      const e = mainMap[keyForDomain(d)];
+      const nt = ntValueFor(e);
+      return h - y(nt);
+    })
+    .attr('fill', NT_COLOR)
+    .on('mouseover',function(e,d){
+      activePickerIndex=0;
+      const key = keyForDomain(d);
+      const entry = mainMap[key];
+      const ht = htValueFor(entry);
+      const nt = ntValueFor(entry);
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(timeLbl, ht, nt));
+    })
+    .on('mousemove',function(e,d){
+      const key = keyForDomain(d);
+      const entry = mainMap[key];
+      const ht = htValueFor(entry);
+      const nt = ntValueFor(entry);
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(timeLbl, ht, nt));
+    })
+    .on('mouseout',function(){ activePickerIndex=null; hideTooltip(); });
+
+  // HT rects stacked on top of NT
+  g.selectAll('.bar-ht').data(xLabels).enter().append('rect')
+    .attr('class','bar-ht')
+    .attr('x',d=>x(d))
+    .attr('width',barW)
+    .attr('y',d=>{
+      const e = mainMap[keyForDomain(d)];
+      const ht = htValueFor(e);
+      const nt = ntValueFor(e);
+      return y(nt + ht);
+    })
+    .attr('height',d=>{
+      const e = mainMap[keyForDomain(d)];
+      const ht = htValueFor(e);
+      return h - y(ht);
+    })
+    .attr('fill', HT_COLOR)
+    .on('mouseover',function(e,d){
+      activePickerIndex=0;
+      const key = keyForDomain(d);
+      const entry = mainMap[key];
+      const ht = htValueFor(entry);
+      const nt = ntValueFor(entry);
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(timeLbl, ht, nt));
+    })
+    .on('mousemove',function(e,d){
+      const key = keyForDomain(d);
+      const entry = mainMap[key];
+      const ht = htValueFor(entry);
+      const nt = ntValueFor(entry);
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(timeLbl, ht, nt));
+    })
+    .on('mouseout',function(){ activePickerIndex=null; hideTooltip(); });
+
+  // Summen + Tabelle
+  sumDisplayed(xLabels, mainMap);
+  renderSummary();
+  if(tableContainer.style.display === 'block'){
+    renderTablesFromChart(xLabels, mainMap);
+  }
+}
+
+function sumDisplayed(xLabels, mainMap){
+  let sHT=0, sNT=0;
+  for(const lbl of xLabels){
+    const key = (lbl && typeof lbl === 'object' && 'idx' in lbl) ? lbl.idx : lbl;
+    const e = mainMap[key];
+    sHT += htValueFor(e);
+    sNT += ntValueFor(e);
+  }
+  lastChartAgg = { main: { ht: sHT, nt: sNT, total: sHT+sNT } };
+}
+
+/* ==========================
+   Summary
+   ========================== */
+function fmt2de(v){
+  const n = Number(v ?? 0);
+  return n.toFixed(2).replace('.', ',');
+}
+function renderSummary(){
+  const mainLbl = periodLabelForPicker(pickers[0]) || 'Ausgewählter Zeitraum';
+  if(isGasDevice){
+    summaryDiv.innerHTML = `<div class="kv">${mainLbl}: Keine HT/NT-Auswertung (Gas-Gerät).</div>`;
+    return;
+  }
+  summaryDiv.innerHTML =
+    `<div class="kv">${mainLbl}: `+
+    `NT: ${fmt2de(lastChartAgg.main.nt)} kWh | `+
+    `HT: ${fmt2de(lastChartAgg.main.ht)} kWh | `+
+    `Summe: ${fmt2de(lastChartAgg.main.total)} kWh</div>`;
+}
+
+/* ==========================
+   Tabelle + CSV Export (HT/NT)
+   ========================== */
+function getTsForRow(lbl, picker, entry){
+  if(entry && typeof entry.Timestamp === 'number') return entry.Timestamp;
+
+  // Fallback (nur für fehlende Einträge)
+  if(picker?.year){
+    const y = Number(picker.year);
+    const m = Number(picker.month||1);
+    const d = Number(picker.day||1);
+
+    if(picker.day){
+      const hh = typeof lbl === 'string' ? Number(String(lbl).slice(0,2)) : Number(lbl||0);
+      return Math.floor(new Date(y, m-1, d, hh, 0, 0).getTime()/1000);
+    }
+    if(picker.month && !picker.day){
+      return Math.floor(new Date(y, m-1, Number(lbl||1), 0, 0, 0).getTime()/1000);
+    }
+    if(!picker.month){
+      return Math.floor(new Date(y, Number(lbl||1)-1, 1, 0, 0, 0).getTime()/1000);
+    }
+  }
+  return 0;
+}
+
+function renderTableBlock(title, rows){
+  const fmt3 = v => Number(v ?? 0).toFixed(3);
+
+  let html = `<div class="card" style="margin-top:12px;padding:12px;">`;
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">`;
+  html += `<div class="kv" style="font-weight:700">${title}</div>`;
+  html += `<button class="btn" type="button" data-export="main">CSV Export</button>`;
+  html += `</div>`;
+
+  html += `<table class="data-grid">`;
+  html += `<thead><tr><th>Datum</th><th>Uhrzeit</th><th>NT [kWh]</th><th>HT [kWh]</th><th>Summe [kWh]</th></tr></thead><tbody>`;
+
+  for(const r of rows){
+    html += `<tr><td>${r.date||''}</td><td>${r.time||''}</td>`;
+    html += `<td>${fmt3(r.nt)}</td><td>${fmt3(r.ht)}</td><td>${fmt3(r.total)}</td>`;
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function renderTablesFromChart(xLabels, mainMap){
+  lastTableDataMain = [];
+
+  for(const lbl of xLabels){
+    const key = (lbl && typeof lbl === 'object' && 'idx' in lbl) ? lbl.idx : lbl;
+    const entry = mainMap[key];
+
+    const ts = getTsForRow((lbl && typeof lbl === 'object' && 'lbl' in lbl) ? lbl.lbl : lbl, pickers[0], entry);
+    const dt = ts ? formatBerlin(ts) : {date:'', time:''};
+
+    const ht = htValueFor(entry);
+    const nt = ntValueFor(entry);
+    lastTableDataMain.push({
+      date: dt.date,
+      time: dt.time,
+      nt,
+      ht,
+      total: nt+ht
+    });
+  }
+
+  const mainLbl = periodLabelForPicker(pickers[0]) || 'Zeitraum';
+  tableContainer.innerHTML = renderTableBlock(mainLbl, lastTableDataMain);
+
+  const btn = tableContainer.querySelector('button[data-export="main"]');
+  if(btn){
+    btn.addEventListener('click', ()=> downloadCsv());
+  }
+}
+
+function downloadCsv(){
+  const rows = lastTableDataMain;
+  if(!rows || rows.length===0){
+    alert('Keine Daten vorhanden – bitte erst Datentabelle laden.');
+    return;
+  }
+
+  const header = ['Datum','Uhrzeit','NT [kWh]','HT [kWh]','Summe [kWh]'];
+  const fmt3 = v => Number(v ?? 0).toFixed(3);
+
+  const lines = [];
+  lines.push(header.join(';'));
+  for(const r of rows){
+    lines.push([r.date||'', r.time||'', fmt3(r.nt), fmt3(r.ht), fmt3(r.total)].join(';'));
+  }
+
+  const csvText = lines.join('\n');
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const dev = selectedDevice || 'device';
+  const fname = `${dev}_${stamp}_htnt.csv`;
+
+  const blob = new Blob([csvText], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* ==========================
+   Geräte laden
+   ========================== */
+async function loadDevices(){
+  devicesDropdown.innerHTML = '<option>Lade Geräte...</option>';
+  try{
+    const dev = await fetchJSON(apiUrl+'all/devices');
+    if(!Array.isArray(dev) || dev.length===0){
+      devicesDropdown.innerHTML = '<option value="">Keine Geräte</option>';
+      return;
+    }
+    devicesDropdown.innerHTML = dev.map(d=>`<option value="${d.DeviceId}" data-division="${d.Division}">${d.DeviceId}</option>`).join('');
+    selectedDevice = dev[0].DeviceId;
+    devicesDropdown.value = selectedDevice;
+
+    devicesDropdown.onchange = ()=>{
+      selectedDevice = devicesDropdown.value;
+      updateChartTitle();
+      updateVisualization();
+    };
+
+    updateChartTitle();
+    updateVisualization();
+  }catch(e){
+    devicesDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
+    alert("Geräte-Fehler: "+e.message);
+  }
+}
+
+/* ==========================
+   Daten laden + Rendern
+   ========================== */
+async function updateVisualization(){
+  if(!selectedDevice) return;
+
+  loadingIndicator.style.visibility = 'visible';
+
+  const selOpt = devicesDropdown.options[devicesDropdown.selectedIndex];
+  const division = Number(selOpt?.dataset?.division);
+  isGasDevice = (division === 4);
+
+  updateChartTitle();
+
+  async function fetchReportForPicker(picker){
+    const y = picker.year, m = picker.month, d = picker.day;
+    let url = apiUrl + selectedDevice + '/report';
+    if(y && !m) url += `?year=${y}`;
+    else if(y && m && !d) url += `?year=${y}&month=${m}`;
+    else if(y && m && d) url += `?year=${y}&month=${m}&day=${d}`;
+    return fetchJSON(url);
+  }
+
+  try{
+    const data1 = await fetchReportForPicker(pickers[0]);
+
+    // HT/NT Plausibilitätscheck: wenn nicht vorhanden -> Hinweis statt Crash
+    if(!isGasDevice){
+      const rv = data1?.Consumption?.ReportValues || [];
+      const any = Array.isArray(rv) ? rv.find(x => x && typeof x === 'object') : null;
+      const hasHTNT = !!(any && (('DeltaHT' in any) || ('deltaHT' in any)) && (('DeltaNT' in any) || ('deltaNT' in any)));
+      if(!hasHTNT){
+        // Render "keine HT/NT" Nachricht
+        const svg = d3.select(chartSvg);
+        svg.selectAll("*").remove();
+        const margin={top:20,right:20,bottom:70,left:55};
+        const w=960 - margin.left - margin.right;
+        const h=460 - margin.top - margin.bottom;
+        const g = svg
+          .attr('width',  w + margin.left + margin.right)
+          .attr('height', h + margin.top  + margin.bottom)
+          .append('g')
+          .attr('transform', `translate(${margin.left},${margin.top})`);
+        g.append('text')
+          .attr('x', 0).attr('y', 20)
+          .text('Dieses Gerät liefert keine HT/NT-Werte in der API-Antwort (DeltaHT/DeltaNT fehlen).')
+          .style('font-weight','700');
+
+        summaryDiv.innerHTML = `<div class="kv">Keine HT/NT-Daten verfügbar.</div>`;
+        lastTableDataMain = [];
+        lastChartAgg = { main: { ht:0, nt:0, total:0 } };
+        if(tableContainer.style.display === 'block'){
+          tableContainer.innerHTML = `<div class="card" style="margin-top:12px;padding:12px;"><div class="kv">Keine HT/NT-Daten.</div></div>`;
+        }
+
+        loadingIndicator.style.visibility = 'hidden';
+        return;
+      }
+    }
+
+    renderChart(data1);
+    loadingIndicator.style.visibility = 'hidden';
+  }catch(e){
+    loadingIndicator.style.visibility = 'hidden';
+    alert("Fehler beim Laden der Daten: "+e.message);
+  }
+}
+
+/* ==========================
+   Tabelle ein/aus
+   ========================== */
+toggleTableBtn.addEventListener('click', () => {
+  if(tableContainer.style.display === 'block'){
+    tableContainer.style.display = 'none';
+    toggleTableBtn.textContent = 'Datentabelle laden';
+    return;
+  }
+  tableContainer.style.display = 'block';
+  toggleTableBtn.textContent = 'Datentabelle ausblenden';
+  updateVisualization();
+});
+
+/* ==========================
+   Init
+   ========================== */
+(function init(){
+  setInitialPickerToToday();
+  buildRollPicker();
+  loadDevices();
+})();
+</script>
+
+</body>
+</html>

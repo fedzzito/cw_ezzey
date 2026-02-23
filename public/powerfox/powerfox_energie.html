@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Energie-Dashboard für deinen poweropti</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .spinner{ width:18px; height:18px; border-radius:50%; border:3px solid #e6eef6; border-top-color:var(--primary, #0070ba); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle;}
+    @keyframes spin{ to { transform:rotate(360deg); } }
+    #chart { height: 460px; display:block; }
+    .rollpicker-inline { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+    .picker-set { display:flex; gap:8px; align-items:center; border:1px solid #e6eef6; border-radius:10px; padding:8px 12px; background:#f8fafc; min-width:300px; }
+    .picker-group { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+    .picker-label { font-size:13px; color:var(--muted); font-weight:600; }
+    .picker-roll-container { display:flex; align-items:center; gap:4px; }
+    .picker-roll { max-height:120px; overflow-y:hidden; display:flex; flex-direction:column; align-items:center; border-radius:8px; border:1px solid rgba(0,0,0,0.08); background:transparent; padding:4px 6px; }
+    .picker-item{ display:inline-flex; align-items:center; justify-content:center; padding:5px 10px; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; font-weight:600; white-space:nowrap; border:0; }
+    .picker-item.placeholder{ opacity:0.25; cursor:default; }
+    .picker-item.selected{ background:var(--primary); color:#fff; box-shadow: 0 6px 20px rgba(2,112,170,0.15); transform:translateY(-1px); border:none; }
+    .picker-arrow { width:24px; height:24px; border:none; background:transparent; font-size:16px; color:#888; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    .picker-add { margin-left:6px; }
+    .picker-remove { background:transparent; border:1px solid rgba(0,0,0,0.08); color:var(--danger); border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+    .data-grid { width:100%; border-collapse:collapse; }
+    .data-grid th, .data-grid td { border:1px solid #e6eef6; padding:8px 10px; text-align:left; }
+    .data-grid thead th { background:#f8fafc; font-weight:700; color:var(--text); }
+    #rollpicker-container.card { padding:12px; }
+
+    /* FIX: Tooltip Text sichtbar machen (falls globale Styles z.B. color:white setzen) */
+    .tooltip {
+      position:absolute;
+      display:none;
+      pointer-events:none;
+      background:#fff;
+      border:1px solid #ccc;
+      padding:6px;
+      border-radius:4px;
+      font-size:13px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.13);
+      z-index:9999;
+      color:#111;
+    }
+    .tooltip, .tooltip * { color:#111; }
+
+    .device-selection-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:0.75em; margin-top:1em; }
+    .device-left { display:flex; align-items:center; gap:10px; }
+    .device-left label { margin-right:7px; }
+    .device-left select { min-width:120px; }
+    .device-right { margin-left:auto; display:flex; align-items:center; justify-content:flex-end; flex:1 1 0%; gap:8px; }
+    .wechsel-btn { white-space:nowrap; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="site-header" role="banner" aria-label="Seitenkopf">
+      <h1>Energiedaten-Dashboard</h1>
+      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+    </header>
+    <main class="container" role="main">
+     <div class="paypal-donate" role="region" aria-label="Spenden und Feedback">
+      <form action="https://www.paypal.com/donate" method="post" target="_blank">
+       <input type="hidden" name="business" value="fedzzito@gmail.com">
+       <input type="hidden" name="currency_code" value="EUR">
+       <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
+       </form>
+      </div>
+
+      <div class="device-selection-row" role="region" aria-label="Geräteauswahl">
+        <div class="device-left">
+          <label for="devices">Gerät auswählen:</label>
+          <select id="devices"></select>
+        </div>
+        <div class="device-right">
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_csv.html'">
+            zu CSV-Download wechseln
+          </button>
+
+          <!-- NEU: ezzey.de Button -->
+          <button class="wechsel-btn btn" type="button" onclick="window.open('https://ezzey.de/','_blank')">
+            ezzey.de
+          </button>
+
+          <!-- NEU: HT/NT Button (nur sichtbar wenn HT/NT erkannt) -->
+          <button id="htnt-btn" class="wechsel-btn btn" type="button" style="display:none" onclick="window.open('https://ezzey.de/powerfox/powerfox_htnt','_blank')">
+            HT/NT
+          </button>
+
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_leistung.html'">
+            zu Leistungswerten wechseln
+          </button>
+        </div>
+      </div>
+
+      <div id="rollpicker-container" class="card" aria-label="Datumsauswahl" style="margin-top:12px;"></div>
+
+      <div id="chart-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;">
+        <div id="title-container" style="display:flex;align-items:center;gap:10px;">
+          <div id="loading-indicator" class="spinner" style="visibility:hidden;"></div>
+          <h2 id="chart-title" style="margin:0">Energiedaten</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div id="gas-switch-container" style="display:none;align-items:center;gap:10px;">
+            <span class="kv">Gas-Einheit:</span>
+            <button id="gas-switch-btn" class="btn" type="button">m³/kWh</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chart-container" class="chart-wrapper" style="margin-top:12px;">
+        <svg id="chart"></svg>
+      </div>
+
+      <div id="summary" style="margin-top:14px;"></div>
+
+      <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+        <button id="toggle-table" class="btn">Datentabelle laden</button>
+        <!-- Entfernt: globaler CSV-Export Button (Tabelle-Karten-Buttons reichen aus) -->
+      </div>
+
+      <div id="table-container" style="display:none; margin-top:12px;"></div>
+      <div id="tooltip" class="tooltip"></div>
+    </main>
+  </div>
+
+<script>
+const apiUrl               = 'https://backend.powerfox.energy/api/2.0/my/';
+const devicesDropdown      = document.getElementById('devices');
+const chartSvg             = document.getElementById('chart');
+const tooltip              = document.getElementById('tooltip');
+const chartTitle           = document.getElementById('chart-title');
+const loadingIndicator     = document.getElementById('loading-indicator');
+const summaryDiv           = document.getElementById('summary');
+const toggleTableBtn       = document.getElementById('toggle-table');
+const tableContainer       = document.getElementById('table-container');
+const rollpickerContainer  = document.getElementById('rollpicker-container');
+const gasSwitchContainer   = document.getElementById('gas-switch-container');
+const gasSwitchBtn         = document.getElementById('gas-switch-btn');
+const logoutBtn            = document.getElementById('logoutBtn');
+const htntBtn              = document.getElementById('htnt-btn');
+
+let selectedDevice = null;
+let isGasDevice = false;
+let gasUnit = 'm3';
+const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const pad = n => n < 10 ? '0' + n : n;
+const pickerColors = ["#0070ba", "#FF3B30"];
+
+let pickers = [{year:null, month:null, day:null, color:pickerColors[0], type:"main"}];
+let compareActive = false;
+let activePickerIndex = null;
+
+let lastTableDataMain = [];
+let lastTableDataCompare = [];
+let lastChartAgg = {
+  main: { consumption: 0, feedin: 0 },
+  compare: { consumption: 0, feedin: 0 },
+  hasCompare: false
+};
+
+// NEU: HT/NT Erkennung
+let isHtNtDevice = false;
+
+if(logoutBtn){
+  logoutBtn.addEventListener('click', function(){
+    localStorage.removeItem('credentials');
+    localStorage.removeItem('devices');
+    location.href = 'index.html';
+  });
+}
+
+if(gasSwitchBtn){
+  gasSwitchBtn.addEventListener('click', () => {
+    gasUnit = gasUnit === 'm3' ? 'kwh' : 'm3';
+    updateChartTitle();
+    updateVisualization();
+  });
+}
+
+/**
+ * Zeit-Helfer
+ * - API liefert UTC-Timestamps (Epoch seconds).
+ * - Darstellung: Immer deutsche Zeit (Europe/Berlin), inkl. Sommer-/Winterzeit.
+ * - Bei Zeitumstellung sollen 23/25 Balken angezeigt werden (das ergibt sich aus der echten
+ *   Europe/Berlin-Umrechnung der UTC-Timestamps).
+ */
+
+/* FIX: immer Europe/Berlin statt Browser-Lokalzeit */
+const BERLIN_TZ = 'Europe/Berlin';
+const dtfBerlin = new Intl.DateTimeFormat('de-DE', {
+  timeZone: BERLIN_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  hour12: false
+});
+
+/* Hilfsfunktion: holt Berlin-Komponenten aus UTC-Epoch-seconds */
+function berlinPartsFromUtcTs(ts){
+  const parts = dtfBerlin.formatToParts(new Date(ts * 1000));
+  const obj = {};
+  for(const p of parts){
+    if(p.type !== 'literal') obj[p.type] = p.value;
+  }
+  // obj: { day:"18", month:"02", year:"2026", hour:"13" }
+  return {
+    year: Number(obj.year),
+    month: Number(obj.month),
+    day: Number(obj.day),
+    hour: Number(obj.hour)
+  };
+}
+
+/* Dummy-Date, nur damit bestehende Codepfade (getFullYear/getMonth/getDate/getHours) weiter funktionieren.
+   Achtung: Das ist KEIN echtes Berlin-Date-Objekt, aber die Komponenten stimmen für Europe/Berlin. */
+function dtBerlinFromUtcTs(ts){
+  const p = berlinPartsFromUtcTs(ts);
+  return new Date(p.year, p.month-1, p.day, p.hour, 0, 0);
+}
+
+function formatBerlin(ts){
+  const p = berlinPartsFromUtcTs(ts);
+  return {
+    date: `${p.day}.${pad(p.month)}.${p.year}`,
+    time: `${pad(p.hour)}:00`
+  };
+}
+
+function sameBerlinDay(p, y, m, day){
+  return p.year===Number(y) && p.month===Number(m) && p.day===Number(day);
+}
+function sameBerlinMonth(p, y, m){
+  return p.year===Number(y) && p.month===Number(m);
+}
+function sameBerlinYear(p, y){
+  return p.year===Number(y);
+}
+
+function buildRollPicker(){
+  rollpickerContainer.innerHTML = '';
+  if(pickers.length === 0){
+    pickers = [{year:null, month:null, day:null, color: pickerColors[0], type:'main'}];
+  }
+  const container = document.createElement('div');
+  container.className = 'rollpicker-inline';
+
+  function createRoll(values, selectedAbsIdx, setAbsValue, labelMap){
+    const rollWrap = document.createElement('div');
+    rollWrap.className = 'picker-roll-container';
+
+    let idxAbs = (selectedAbsIdx !== undefined && selectedAbsIdx !== null) ? selectedAbsIdx : 0;
+    if(idxAbs < 0) idxAbs = 0;
+    if(values && idxAbs > values.length - 1) idxAbs = values.length - 1;
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'picker-arrow';
+    upBtn.innerHTML = '&#9650;';
+    upBtn.type = 'button';
+    upBtn.onclick = () => {
+      if(!values || values.length===0) return;
+      if (idxAbs > 0) {
+        idxAbs--;
+        setAbsValue(idxAbs);
+      }
+    };
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'picker-arrow';
+    downBtn.innerHTML = '&#9660;';
+    downBtn.type = 'button';
+    downBtn.onclick = () => {
+      if(!values || values.length===0) return;
+      if (idxAbs < values.length - 1) {
+        idxAbs++;
+        setAbsValue(idxAbs);
+      }
+    };
+
+    rollWrap.appendChild(upBtn);
+
+    const roll = document.createElement('div');
+    roll.className = 'picker-roll';
+    roll.addEventListener('wheel', (e) => {
+      if(!values || values.length===0) return;
+      e.preventDefault();
+      if(e.deltaY > 0){
+        if (idxAbs < values.length - 1) {
+          idxAbs++;
+          setAbsValue(idxAbs);
+        }
+      } else if(e.deltaY < 0){
+        if (idxAbs > 0) {
+          idxAbs--;
+          setAbsValue(idxAbs);
+        }
+      }
+    }, { passive: false });
+
+    function renderWindow(){
+      roll.innerHTML = '';
+      if(!values || values.length===0){
+        for(let i=0;i<5;i++){
+          const ph = document.createElement('div');
+          ph.className = 'picker-item placeholder';
+          ph.innerText = '--';
+          roll.appendChild(ph);
+        }
+        return;
+      }
+      for(let offset = -2; offset <= 2; offset++){
+        const vidx = idxAbs + offset;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if(vidx < 0 || vidx >= values.length){
+          btn.className = 'picker-item placeholder';
+          btn.innerText = '';
+          btn.disabled = true;
+        } else {
+          btn.className = 'picker-item';
+          btn.innerText = labelMap ? (labelMap[values[vidx]] || values[vidx]) : values[vidx];
+          if(vidx === idxAbs) btn.classList.add('selected');
+          btn.onclick = (() => {
+            const clickIdx = vidx;
+            return () => setAbsValue(clickIdx);
+          })();
+        }
+        roll.appendChild(btn);
+      }
+    }
+
+    renderWindow();
+    rollWrap.appendChild(roll);
+    rollWrap.appendChild(downBtn);
+
+    return {el: rollWrap, refresh: renderWindow};
+  }
+
+  function createPickerSet(picker, idx){
+    const set = document.createElement('div');
+    set.className = 'picker-set';
+    set.dataset.index = idx;
+
+    const years = [];
+    const currentYear = new Date().getFullYear();
+    for(let y=2019; y<=currentYear; y++) years.push(y);
+    let yearIdx = picker.year ? years.indexOf(Number(picker.year)) : 0;
+    if(yearIdx < 0) yearIdx = 0;
+
+    const yearGroup = document.createElement('div');
+    yearGroup.className = 'picker-group';
+    const yearLabel = document.createElement('div');
+    yearLabel.className = 'picker-label';
+    yearLabel.innerText = "Jahr";
+    yearGroup.appendChild(yearLabel);
+    const yearRollObj = createRoll(years, yearIdx, (newAbsIdx)=>{
+      picker.year = years[newAbsIdx]; picker.month = null; picker.day = null;
+      if(idx===0 && compareActive) { syncComparePickerLevel(); setDefaultComparePicker(); }
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, null);
+    yearGroup.appendChild(yearRollObj.el);
+    set.appendChild(yearGroup);
+
+    let months = picker.year ? Array.from({length:12},(_,i)=>i+1) : [];
+    let monthIdx = picker.month ? months.indexOf(Number(picker.month)) : 0;
+    if(monthIdx < 0) monthIdx = 0;
+
+    const monthGroup = document.createElement('div');
+    monthGroup.className = 'picker-group';
+    const monthLabel = document.createElement('div');
+    monthLabel.className = 'picker-label';
+    monthLabel.innerText = "Monat";
+    monthGroup.appendChild(monthLabel);
+
+    let monthNameMap = {};
+    months.forEach((m,i) => monthNameMap[m] = monthNames[i]);
+
+    const monthRollObj = createRoll(months, monthIdx, (newAbsIdx)=>{
+      picker.month = months[newAbsIdx]; picker.day = null;
+      if(idx===0 && compareActive) { syncComparePickerLevel(); setDefaultComparePicker(); }
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, monthNameMap);
+    monthGroup.appendChild(monthRollObj.el);
+    set.appendChild(monthGroup);
+
+    let days = [];
+    if(picker.year && picker.month){
+      const maxDay = new Date(picker.year, picker.month, 0).getDate();
+      days = Array.from({length:maxDay}, (_,i)=>i+1);
+    }
+    let dayIdx = picker.day ? days.indexOf(Number(picker.day)) : 0;
+    if(dayIdx < 0) dayIdx = 0;
+
+    const dayGroup = document.createElement('div');
+    dayGroup.className = 'picker-group';
+    const dayLabel = document.createElement('div');
+    dayLabel.className = 'picker-label';
+    dayLabel.innerText = "Tag";
+    dayGroup.appendChild(dayLabel);
+
+    const dayRollObj = createRoll(days, dayIdx, (newAbsIdx)=>{
+      picker.day = days[newAbsIdx];
+      if(idx===0 && compareActive) { syncComparePickerLevel(); setDefaultComparePicker(); }
+      buildRollPicker(); updateChartTitle(); updateVisualization();
+    }, null);
+    set.appendChild(dayGroup);
+    dayGroup.appendChild(dayRollObj.el);
+
+    if(idx===1){
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'picker-remove';
+      removeBtn.type = 'button';
+      removeBtn.title = 'Vergleich entfernen';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.onclick = ()=>{
+        pickers.splice(1,1);
+        compareActive = false;
+        activePickerIndex = null;
+        buildRollPicker();
+        updateChartTitle();
+        updateVisualization();
+      };
+      set.insertBefore(removeBtn, set.firstChild);
+    }
+
+    return set;
+  }
+
+  container.appendChild(createPickerSet(pickers[0], 0));
+
+  if(compareActive && pickers[1]){
+    container.appendChild(createPickerSet(pickers[1], 1));
+  } else {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'picker-add btn';
+    addBtn.innerText = 'Vergleich einfügen';
+    addBtn.onclick = ()=>{
+      compareActive = true;
+      pickers[1] = pickerLevelCopy(pickers[0]);
+      pickers[1].color = pickerColors[1];
+      pickers[1].type = "compare";
+      setDefaultComparePicker();
+      buildRollPicker();
+      updateChartTitle();
+      updateVisualization();
+    };
+    container.appendChild(addBtn);
+  }
+
+  rollpickerContainer.appendChild(container);
+}
+
+function pickerLevelCopy(p){
+  return { year: p.year, month: p.month, day: p.day, color: p.color, type:p.type };
+}
+
+function syncComparePickerLevel(){
+  if(!compareActive || !pickers[1]) return;
+  const main = pickers[0];
+  const cmp = pickers[1];
+  if(main.year && !cmp.year){ cmp.year = main.year; }
+  if(main.month && !cmp.month){ cmp.month = main.month; }
+  if(main.day && !cmp.day){ cmp.day = main.day; }
+}
+
+function setDefaultComparePicker(){
+  if(!compareActive || !pickers[1]) return;
+  const main = pickers[0];
+  const cmp = pickers[1];
+
+  if(main.year && !main.month){
+    const y = Number(main.year);
+    cmp.year = (y>2019) ? (y-1) : y;
+    cmp.month = null; cmp.day = null;
+  } else if(main.year && main.month && !main.day){
+    let y = Number(main.year), m = Number(main.month);
+    m = m-1;
+    if(m<1){ m=12; y = y-1; }
+    cmp.year = y; cmp.month = m; cmp.day = null;
+  } else if(main.year && main.month && main.day){
+    let y = Number(main.year), m = Number(main.month), d = Number(main.day);
+    d = d-1;
+    if(d<1){
+      m = m-1;
+      if(m<1){ m=12; y=y-1; }
+      const maxD = new Date(y, m, 0).getDate();
+      d = maxD;
+    }
+    cmp.year = y; cmp.month = m; cmp.day = d;
+  }
+}
+
+function setInitialPickerToToday(){
+  /* FIX: "Heute" in deutscher Zeit (Europe/Berlin) */
+  const nowTs = Math.floor(Date.now()/1000);
+  const p = berlinPartsFromUtcTs(nowTs);
+  pickers[0].year = p.year;
+  pickers[0].month = p.month;
+  pickers[0].day = p.day;
+}
+
+function getCredentials(){ return localStorage.getItem('credentials'); }
+function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
+
+async function fetchJSON(url){
+  const creds = getCredentials();
+  if(!creds){ alert("Nicht angemeldet."); location.href="index.html"; throw new Error("no creds"); }
+  const res = await fetch(url,{headers: AUTH_HEADER()});
+  if(res.status===401||res.status===403){
+    localStorage.removeItem('credentials');
+    localStorage.removeItem('devices');
+    location.href="index.html";
+    throw new Error("auth");
+  }
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return res.json();
+}
+
+async function loadDevices(){
+  devicesDropdown.innerHTML = '<option>Lade Geräte...</option>';
+  try{
+    const dev = await fetchJSON(apiUrl+'all/devices');
+    if(!Array.isArray(dev) || dev.length===0){
+      devicesDropdown.innerHTML = '<option value="">Keine Geräte</option>';
+      return;
+    }
+    devicesDropdown.innerHTML = dev.map(d=>`<option value="${d.DeviceId}" data-division="${d.Division}">${d.DeviceId}</option>`).join('');
+    selectedDevice = dev[0].DeviceId;
+    devicesDropdown.value = selectedDevice;
+    devicesDropdown.onchange = ()=>{
+      selectedDevice = devicesDropdown.value;
+      updateChartTitle();
+      updateVisualization();
+    };
+    updateChartTitle();
+    updateVisualization();
+  }catch(e){
+    devicesDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
+    alert("Geräte-Fehler: "+e.message);
+  }
+}
+
+/* Zeitraum-Label für Picker */
+function periodLabelForPicker(p){
+  if(!p || !p.year) return '';
+  if(p.year && !p.month) return String(p.year);
+  if(p.year && p.month && !p.day) return `${monthNames[p.month-1]} ${p.year}`;
+  if(p.year && p.month && p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year}`;
+  return '';
+}
+
+function updateChartTitle(){
+  const main = pickers[0];
+
+  let t = isGasDevice ? ("Gas-Verbrauch ("+(gasUnit==='m3'?'m³':'kWh')+")") : "Energiedaten";
+
+  const mainLbl = periodLabelForPicker(pickers[0]);
+  const cmpLbl  = compareActive ? periodLabelForPicker(pickers[1]) : '';
+
+  if(compareActive && mainLbl && cmpLbl){
+    t += ` – ${mainLbl} vs. ${cmpLbl}`;
+  } else {
+    if(main.year && !main.month) t += ` – ${main.year}`;
+    if(main.year && main.month && !main.day) t += ` – ${monthNames[main.month-1]} ${main.year}`;
+    if(main.year && main.month && main.day) t += ` – ${pad(main.day)}.${pad(main.month)}.${main.year}`;
+  }
+
+  chartTitle.textContent = t;
+}
+
+/**
+ * Tooltip: über dem Balken platzieren (nicht mehr via clientX/clientY),
+ * damit er zuverlässig sichtbar ist (auch bei SVG/Transform).
+ */
+function showTooltipAtPageXY(pageX, pageY, html){
+  tooltip.innerHTML = html;
+  tooltip.style.left = `${Math.round(pageX)}px`;
+  tooltip.style.top = `${Math.round(pageY)}px`;
+  tooltip.style.display = 'block';
+}
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+function placeTooltipAboveRect(rectEl, html){
+  if(!rectEl) return;
+  // Tooltip erstmal anzeigen, damit offsetWidth/Height stimmen
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+
+  const rect = rectEl.getBoundingClientRect();
+  const ttW = tooltip.offsetWidth || 0;
+  const ttH = tooltip.offsetHeight || 0;
+
+  // über dem Balken, zentriert
+  let left = rect.left + window.scrollX + rect.width/2 - ttW/2;
+  let top  = rect.top + window.scrollY - ttH - 8;
+
+  // clamp in viewport
+  const minLeft = window.scrollX + 6;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - ttW - 6;
+  left = Math.max(minLeft, Math.min(maxLeft, left));
+
+  // falls zu weit oben -> unter den Balken
+  if(top < window.scrollY + 6){
+    top = rect.bottom + window.scrollY + 8;
+  }
+
+  showTooltipAtPageXY(left, top, html);
+}
+
+function tooltipTimeLbl(lbl, picker){
+  const p = picker;
+
+  // Jahransicht: Label = Monat (1-12)
+  if(p.year && !p.month) return `${monthNames[lbl-1]} ${p.year}`;
+
+  // Monatsansicht: Label = Tag (1..max)
+  if(p.month && !p.day) return `${pad(lbl)}.${pad(p.month)}.${p.year} (DE)`;
+
+  // Tagesansicht: Label = Stunde-Label aus xLabels (kann doppelt vorkommen)
+  if(p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year} ${String(lbl)} (DE)`;
+
+  // Fallback für Date-Labels
+  if(lbl instanceof Date){
+    return `${pad(lbl.getDate())}.${pad(lbl.getMonth()+1)}.${lbl.getFullYear()} ${pad(lbl.getHours())}:00 (DE)`;
+  }
+  return String(lbl);
+}
+
+function renderChart(data1, data2){
+  const svg = d3.select(chartSvg);
+  svg.selectAll("*").remove();
+
+  const margin={top:20,right:20,bottom:70,left:55};
+  const w=960 - margin.left - margin.right;
+  const h=460 - margin.top - margin.bottom;
+
+  let cons1 = [];
+  let feed1 = [];
+  let cons2 = [];
+  let feed2 = [];
+
+  if(isGasDevice){
+    cons1 = data1?.Gas?.ReportValues || [];
+    cons2 = data2?.Gas?.ReportValues || [];
+  } else {
+    cons1 = data1?.Consumption?.ReportValues || [];
+    feed1 = data1?.FeedIn?.ReportValues || [];
+    cons2 = data2?.Consumption?.ReportValues || [];
+    feed2 = data2?.FeedIn?.ReportValues || [];
+  }
+
+  let xLabels=[];
+  const mainMap={};
+  const compareMap={};
+
+  const main = pickers[0];
+
+  // Helper: schneller Index nach Timestamp
+  const idxCons1 = new Map(cons1.map(v => [v.Timestamp, v]));
+  const idxCons2 = new Map(cons2.map(v => [v.Timestamp, v]));
+  const idxFeed1 = new Map(feed1.map(v => [v.Timestamp, v]));
+  const idxFeed2 = new Map(feed2.map(v => [v.Timestamp, v]));
+
+  if(main.year && !main.month){
+    // Jahr: 1..12, Zuordnung nach Berlin-Monat
+    xLabels = d3.range(1,13);
+    xLabels.forEach(m=>{
+      mainMap[m] = cons1.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        return sameBerlinYear(bp, main.year) && bp.month===m;
+      });
+      compareMap[m] = cons2.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        return sameBerlinYear(bp, pickers[1]?.year ?? main.year) && bp.month===m;
+      });
+    });
+  } else if(main.year && main.month && !main.day){
+    // Monat: 1..maxDay, Zuordnung nach Berlin-Tag im Monat
+    const maxD = new Date(main.year, main.month, 0).getDate();
+    xLabels = d3.range(1, maxD+1);
+    xLabels.forEach(dy=>{
+      mainMap[dy] = cons1.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        return sameBerlinMonth(bp, main.year, main.month) && bp.day===dy;
+      });
+      compareMap[dy] = cons2.find(d=>{
+        const bp = berlinPartsFromUtcTs(d.Timestamp);
+        const py = pickers[1]?.year ?? main.year;
+        const pm = pickers[1]?.month ?? main.month;
+        return sameBerlinMonth(bp, py, pm) && bp.day===dy;
+      });
+    });
+  } else if(main.year && main.month && main.day){
+    /**
+     * Tag (DE/Berlin, inkl. DST):
+     * - API-Timestamps (UTC) -> Europe/Berlin umgerechnet
+     * - xLabels enthält die tatsächlich vorhandenen Berlin-Stundenlabels (23/24/25 Einträge),
+     *   als Strings, doppelte Stunde kommt doppelt vor (z.B. "02:00" zweimal).
+     */
+    const mainDayEntries = cons1
+      .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
+      .filter(x => sameBerlinDay(x.bp, main.year, main.month, main.day))
+      .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
+
+    // xLabels in chronologischer Reihenfolge aus tatsächlichen Entries
+    xLabels = mainDayEntries.map(x => `${pad(x.bp.hour)}:00`);
+
+    // mainMap/compareMap keyed by label index (0..len-1), damit doppelte Stunden gehen
+    const mainMapByIdx = {};
+    const compareMapByIdx = {};
+
+    // Compare: gleiche Logik, nach Compare-Tag (in Berlin-Zeit)
+    let compareDayEntries = [];
+    if(compareActive && pickers[1]){
+      const py = pickers[1].year, pm = pickers[1].month, pd = pickers[1].day;
+      compareDayEntries = cons2
+        .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
+        .filter(x => sameBerlinDay(x.bp, py, pm, pd))
+        .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
+    }
+
+    // Compare nach Stunde queue'n
+    const compareByHourQueue = new Map();
+    for(const x of compareDayEntries){
+      const hh = x.bp.hour;
+      if(!compareByHourQueue.has(hh)) compareByHourQueue.set(hh, []);
+      compareByHourQueue.get(hh).push(x.e);
+    }
+
+    // Fill per displayed main-entry
+    for(let i=0;i<mainDayEntries.length;i++){
+      const entry = mainDayEntries[i].e;
+      mainMapByIdx[i] = entry;
+
+      if(compareActive && pickers[1]){
+        const hh = mainDayEntries[i].bp.hour;
+        const q = compareByHourQueue.get(hh) || [];
+        compareMapByIdx[i] = q.length ? q.shift() : null;
+      } else {
+        compareMapByIdx[i] = null;
+      }
+    }
+
+    // Ersetze Maps + Labels für restliche Funktion
+    xLabels = xLabels.map((lbl, idx) => ({lbl, idx}));
+    xLabels.forEach(xl => {
+      mainMap[xl.idx] = mainMapByIdx[xl.idx];
+      compareMap[xl.idx] = compareMapByIdx[xl.idx];
+    });
+  } else {
+    // Fallback: nach Timestamp zusammenführen
+    let times = cons1.map(c=>c.Timestamp);
+    if(cons2.length) for(const c of cons2) if(!times.includes(c.Timestamp)) times.push(c.Timestamp);
+    times.sort((a,b)=>a-b);
+    xLabels = times;
+    xLabels.forEach(ts=>{
+      mainMap[ts] = idxCons1.get(ts);
+      compareMap[ts] = idxCons2.get(ts);
+    });
+  }
+
+  function gasValueFor(entry){
+    if(!entry) return 0;
+    return gasUnit==='kwh'
+      ? (entry.ConsumptionKWh ?? entry.ConsumptionKwh ?? entry.Delta ?? 0)
+      : (entry.Consumption ?? entry.Delta ?? 0);
+  }
+
+  function powerValueFor(entry){
+    if(!entry) return 0;
+    return (entry.Delta ?? 0);
+  }
+
+  // yMax
+  let yMax = 0;
+  const xIter = xLabels;
+  xIter.forEach(lblObj=>{
+    const key = (lblObj && typeof lblObj === 'object' && 'idx' in lblObj) ? lblObj.idx : lblObj;
+
+    const m = mainMap[key];
+    const c = compareMap[key];
+
+    const mv = isGasDevice ? gasValueFor(m) : powerValueFor(m);
+    const cv = isGasDevice ? gasValueFor(c) : powerValueFor(c);
+
+    yMax = Math.max(yMax, mv, cv);
+
+    if(!isGasDevice){
+      const mFeed = m ? (idxFeed1.get(m.Timestamp) || null) : null;
+      const cFeed = c ? (idxFeed2.get(c.Timestamp) || null) : null;
+      if(mFeed) yMax = Math.max(yMax, mFeed.Delta||0);
+      if(cFeed) yMax = Math.max(yMax, cFeed.Delta||0);
+    }
+  });
+  if(yMax <= 0) yMax = 0.001;
+
+  const y=d3.scaleLinear().domain([0,yMax]).range([h,0]);
+
+  const x=d3.scaleBand().domain(xLabels).range([0,w]).padding(0.18);
+
+  const svgSel = svg
+    .attr('width',  w + margin.left + margin.right)
+    .attr('height', h + margin.top  + margin.bottom)
+    .append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // X axis labels
+  svgSel.append('g').attr('transform',`translate(0,${h})`)
+    .call(d3.axisBottom(x).tickFormat(lbl=>{
+      if(lbl && typeof lbl === 'object' && 'lbl' in lbl){
+        return lbl.lbl;
+      }
+      if(pickers[0].year && !pickers[0].month) return monthNames[lbl-1];
+      if(pickers[0].month && !pickers[0].day) return lbl+'.';
+      if(pickers[0].day) return pad(lbl)+':00';
+      if(typeof lbl === 'number'){
+        const bp = berlinPartsFromUtcTs(lbl);
+        return pad(bp.hour)+':00';
+      }
+      return lbl;
+    }))
+    .selectAll("text")
+    .style("text-anchor", "end")
+    .attr("dx", "-0.8em")
+    .attr("dy", "0.15em")
+    .attr("transform", "rotate(-50)");
+
+  svgSel.append('g')
+    .call(d3.axisLeft(y).ticks(10).tickFormat(t=>t+' '+(isGasDevice?(gasUnit==='m3'?'m³':'kWh'):'kWh')));
+
+  let mainOpacity = compareActive?(activePickerIndex===0?1:0.5):1;
+  let compareOpacity = compareActive?(activePickerIndex===1?1:0.5):0.5;
+
+  const consWidth = x.bandwidth()*0.44;
+  const consXMain = d => x(d);
+  const consXCompare = d => x(d)+x.bandwidth()*0.44;
+
+  const feedWidth = consWidth/3;
+  const feedXFromConsX = consX => consX + (consWidth - feedWidth);
+
+  function tooltipHTML(title, timeLabel, consVal, feedVal) {
+    if(isGasDevice){
+      return `<b>${title}</b><br>${timeLabel}<br>`+
+             `Verbrauch: ${consVal.toFixed(3)} ${(gasUnit==='m3'?'m³':'kWh')}`;
+    }
+    return `<b>${title}</b><br>${timeLabel}<br>`+
+           `Verbrauch: ${consVal.toFixed(3)} kWh<br>`+
+           `Einspeisung: ${feedVal.toFixed(3)} kWh`;
+  }
+
+  function keyForDomain(d){
+    return (d && typeof d === 'object' && 'idx' in d) ? d.idx : d;
+  }
+
+  // Consumption main
+  svgSel.selectAll('.bar-main').data(xLabels).enter().append('rect')
+    .attr('class',d=>activePickerIndex===0?'bar-main highlight':'bar-main')
+    .attr('x',d=>consXMain(d))
+    .attr('width',consWidth)
+    .attr('y',d=>y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
+    .attr('height',d=>h-y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
+    .attr('fill',pickerColors[0])
+    .style('opacity',mainOpacity)
+    .on('mouseover',function(e,d){
+      activePickerIndex=0;
+      const key = keyForDomain(d);
+      const m = mainMap[key];
+      const consVal = isGasDevice ? gasValueFor(m) : powerValueFor(m);
+      const feedVal = (!isGasDevice && m) ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(isGasDevice?'Gas':'Verbrauch', timeLbl, consVal, feedVal));
+    })
+    .on('mousemove',function(e,d){
+      activePickerIndex=0;
+      const key = keyForDomain(d);
+      const m = mainMap[key];
+      const consVal = isGasDevice ? gasValueFor(m) : powerValueFor(m);
+      const feedVal = (!isGasDevice && m) ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
+      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      placeTooltipAboveRect(this, tooltipHTML(isGasDevice?'Gas':'Verbrauch', timeLbl, consVal, feedVal));
+    })
+    .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
+
+  // Consumption compare
+  if(compareActive){
+    svgSel.selectAll('.bar-compare').data(xLabels).enter().append('rect')
+      .attr('class',d=>activePickerIndex===1?'bar-compare highlight':'bar-compare')
+      .attr('x',d=>consXCompare(d))
+      .attr('width',consWidth)
+      .attr('y',d=>y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
+      .attr('height',d=>h-y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
+      .attr('fill',pickerColors[1])
+      .style('opacity',compareOpacity)
+      .on('mouseover',function(e,d){
+        activePickerIndex=1;
+        const key = keyForDomain(d);
+        const c = compareMap[key];
+        const consVal = isGasDevice ? gasValueFor(c) : powerValueFor(c);
+        const feedVal = (!isGasDevice && c) ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
+        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+        placeTooltipAboveRect(this, tooltipHTML('Vergleich', timeLbl, consVal, feedVal));
+      })
+      .on('mousemove',function(e,d){
+        activePickerIndex=1;
+        const key = keyForDomain(d);
+        const c = compareMap[key];
+        const consVal = isGasDevice ? gasValueFor(c) : powerValueFor(c);
+        const feedVal = (!isGasDevice && c) ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
+        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+        placeTooltipAboveRect(this, tooltipHTML('Vergleich', timeLbl, consVal, feedVal));
+      })
+      .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
+  }
+
+  // Feed-in bars (remain green), tooltip stable too
+  if(!isGasDevice){
+    svgSel.selectAll('.feed-main').data(xLabels).enter().append('rect')
+      .attr('class',d=>activePickerIndex===0?'feed-main highlight':'feed-main')
+      .attr('x',d=>feedXFromConsX(consXMain(d)))
+      .attr('width',feedWidth)
+      .attr('y',d=>{
+        const key = keyForDomain(d);
+        const m = mainMap[key];
+        const f = m ? (idxFeed1.get(m.Timestamp) || null) : null;
+        return y(f?.Delta||0);
+      })
+      .attr('height',d=>{
+        const key = keyForDomain(d);
+        const m = mainMap[key];
+        const f = m ? (idxFeed1.get(m.Timestamp) || null) : null;
+        return h - y(f?.Delta||0);
+      })
+      .attr('fill','#47be47')
+      .style('opacity',mainOpacity)
+      .on('mouseover',function(e,d){
+        activePickerIndex=0;
+        const key = keyForDomain(d);
+        const m = mainMap[key];
+        const consVal = powerValueFor(m);
+        const feedVal = m ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
+        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+        placeTooltipAboveRect(this, tooltipHTML('Einspeisung', timeLbl, consVal, feedVal));
+      })
+      .on('mousemove',function(e,d){
+        activePickerIndex=0;
+        const key = keyForDomain(d);
+        const m = mainMap[key];
+        const consVal = powerValueFor(m);
+        const feedVal = m ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
+        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+        placeTooltipAboveRect(this, tooltipHTML('Einspeisung', timeLbl, consVal, feedVal));
+      })
+      .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
+
+    if(compareActive){
+      svgSel.selectAll('.feed-compare').data(xLabels).enter().append('rect')
+        .attr('class',d=>activePickerIndex===1?'feed-compare highlight':'feed-compare')
+        .attr('x',d=>feedXFromConsX(consXCompare(d)))
+        .attr('width',feedWidth)
+        .attr('y',d=>{
+          const key = keyForDomain(d);
+          const c = compareMap[key];
+          const f2 = c ? (idxFeed2.get(c.Timestamp) || null) : null;
+          return y(f2?.Delta||0);
+        })
+        .attr('height',d=>{
+          const key = keyForDomain(d);
+          const c = compareMap[key];
+          const f2 = c ? (idxFeed2.get(c.Timestamp) || null) : null;
+          return h - y(f2?.Delta||0);
+        })
+        .attr('fill','#47be47')
+        .style('opacity',compareOpacity)
+        .on('mouseover',function(e,d){
+          activePickerIndex=1;
+          const key = keyForDomain(d);
+          const c = compareMap[key];
+          const consVal = powerValueFor(c);
+          const feedVal = c ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
+          const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+          placeTooltipAboveRect(this, tooltipHTML('Einspeisung (Vergleich)', timeLbl, consVal, feedVal));
+        })
+        .on('mousemove',function(e,d){
+          activePickerIndex=1;
+          const key = keyForDomain(d);
+          const c = compareMap[key];
+          const consVal = powerValueFor(c);
+          const feedVal = c ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
+          const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+          placeTooltipAboveRect(this, tooltipHTML('Einspeisung (Vergleich)', timeLbl, consVal, feedVal));
+        })
+        .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
+    }
+  }
+
+  function sumDisplayed(){
+    let sMainCons=0, sMainFeed=0, sCmpCons=0, sCmpFeed=0;
+
+    for(const lbl of xLabels){
+      const key = keyForDomain(lbl);
+      const m = mainMap[key];
+      const c = compareMap[key];
+
+      if(isGasDevice){
+        sMainCons += gasValueFor(m);
+        if(compareActive) sCmpCons += gasValueFor(c);
+      } else {
+        sMainCons += powerValueFor(m);
+        if(m){
+          const f = idxFeed1.get(m.Timestamp);
+          sMainFeed += (f?.Delta||0);
+        }
+        if(compareActive){
+          sCmpCons += powerValueFor(c);
+          if(c){
+            const f2 = idxFeed2.get(c.Timestamp);
+            sCmpFeed += (f2?.Delta||0);
+          }
+        }
+      }
+    }
+
+    lastChartAgg = {
+      main: { consumption: sMainCons, feedin: sMainFeed },
+      compare: { consumption: sCmpCons, feedin: sCmpFeed },
+      hasCompare: !!compareActive
+    };
+  }
+
+  sumDisplayed();
+  renderSummary();
+  if(tableContainer.style.display === 'block') renderTablesFromChart(xLabels, mainMap, compareMap, idxFeed1, idxFeed2);
+}
+
+/* Summary 2 Nachkommastellen + deutsches Komma + Zeitraumlabel */
+function fmt2de(v){
+  const n = Number(v ?? 0);
+  return n.toFixed(2).replace('.', ',');
+}
+
+function renderSummary(){
+  const mainLbl = periodLabelForPicker(pickers[0]) || 'Ausgewählter Zeitraum';
+  const cmpLbl  = (compareActive && pickers[1]) ? (periodLabelForPicker(pickers[1]) || 'Vergleichszeitraum') : '';
+
+  if(isGasDevice){
+    let html = `<div class="kv">${mainLbl}: Verbrauch: ${fmt2de(lastChartAgg.main.consumption)} ${(gasUnit==='m3'?'m³':'kWh')}</div>`;
+    if(lastChartAgg.hasCompare){
+      html += `<div class="kv">${cmpLbl}: Verbrauch: ${fmt2de(lastChartAgg.compare.consumption)} ${(gasUnit==='m3'?'m³':'kWh')}</div>`;
+    }
+    summaryDiv.innerHTML = html;
+    return;
+  }
+
+  let html = `<div class="kv">${mainLbl}: Verbrauch: ${fmt2de(lastChartAgg.main.consumption)} kWh | Einspeisung: ${fmt2de(lastChartAgg.main.feedin)} kWh</div>`;
+  if(lastChartAgg.hasCompare){
+    html += `<div class="kv">${cmpLbl}: Verbrauch: ${fmt2de(lastChartAgg.compare.consumption)} kWh | Einspeisung: ${fmt2de(lastChartAgg.compare.feedin)} kWh</div>`;
+  }
+  summaryDiv.innerHTML = html;
+}
+
+function getTsForRow(lbl, picker, entry){
+  // Tagesansicht DST: domain item ist Objekt {lbl, idx}. Timestamp kommt vom entry.
+  if(entry && typeof entry.Timestamp === 'number') return entry.Timestamp;
+
+  if(typeof lbl === 'number' && picker && !picker.day && !picker.month && !picker.year){
+    return lbl;
+  }
+
+  // Für "keine entry vorhanden": wir approximieren (DE) -> wir nutzen Date() lokal als Fallback
+  // (diese Zeilen werden primär für Tabellenzeilen ohne Daten genutzt).
+  if(picker?.year){
+    const y = Number(picker.year);
+    const m = Number(picker.month||1);
+    const d = Number(picker.day||1);
+
+    if(picker.day){
+      const hh = typeof lbl === 'string' ? Number(String(lbl).slice(0,2)) : Number(lbl||0);
+      return Math.floor(new Date(y, m-1, d, hh, 0, 0).getTime()/1000);
+    }
+    if(picker.month && !picker.day){
+      return Math.floor(new Date(y, m-1, Number(lbl||1), 0, 0, 0).getTime()/1000);
+    }
+    if(!picker.month){
+      return Math.floor(new Date(y, Number(lbl||1)-1, 1, 0, 0, 0).getTime()/1000);
+    }
+  }
+  return 0;
+}
+
+function renderTableBlock(title, rows, opts){
+  const fmt3 = v => Number(v ?? 0).toFixed(3);
+  let html = `<div class="card" style="margin-top:12px;padding:12px;">`;
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">`;
+  html += `<div class="kv" style="font-weight:700">${title}</div>`;
+  html += `<button class="btn" type="button" data-export="${opts.exportKey}">CSV Export</button>`;
+  html += `</div>`;
+
+  html += `<table class="data-grid">`;
+  html += `<thead><tr><th>Datum</th><th>Uhrzeit</th>`;
+
+  if(opts.isGas){
+    html += `<th>Verbrauch [${opts.gasUnit==='m3'?'m³':'kWh'}]</th>`;
+  } else {
+    html += `<th>Verbrauch [kWh]</th><th>Einspeisung [kWh]</th>`;
+  }
+
+  html += `</tr></thead><tbody>`;
+
+  for(const r of rows){
+    html += `<tr><td>${r.date||''}</td><td>${r.time||''}</td>`;
+    if(opts.isGas){
+      html += `<td>${fmt3(r.consumption)}</td>`;
+    } else {
+      html += `<td>${fmt3(r.consumption)}</td><td>${fmt3(r.feedin)}</td>`;
+    }
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function renderTablesFromChart(xLabels, mainMap, compareMap, feedIdx1, feedIdx2){
+  lastTableDataMain = [];
+  lastTableDataCompare = [];
+
+  for(const lbl of xLabels){
+    const key = (lbl && typeof lbl === 'object' && 'idx' in lbl) ? lbl.idx : lbl;
+
+    const m = mainMap[key];
+    const tsMain = getTsForRow((lbl && typeof lbl === 'object' && 'lbl' in lbl) ? lbl.lbl : lbl, pickers[0], m);
+    const dtMain = tsMain ? formatBerlin(tsMain) : {date:'', time:''};
+
+    if(isGasDevice){
+      const v = m ? (gasUnit==='kwh'
+        ? (m.ConsumptionKWh ?? m.ConsumptionKwh ?? m.Delta ?? 0)
+        : (m.Consumption ?? m.Delta ?? 0)) : 0;
+      lastTableDataMain.push({date: dtMain.date, time: dtMain.time, consumption: v});
+    } else {
+      const mainCons = m?.Delta ?? 0;
+      const mainFeed = m ? (feedIdx1.get(m.Timestamp)?.Delta ?? 0) : 0;
+      lastTableDataMain.push({date: dtMain.date, time: dtMain.time, consumption: mainCons, feedin: mainFeed});
+    }
+
+    if(compareActive){
+      const c = compareMap[key];
+      const tsCmp = getTsForRow((lbl && typeof lbl === 'object' && 'lbl' in lbl) ? lbl.lbl : lbl, pickers[1]||pickers[0], c);
+      const dtCmp = tsCmp ? formatBerlin(tsCmp) : {date:'', time:''};
+
+      if(isGasDevice){
+        const v2 = c ? (gasUnit==='kwh'
+          ? (c.ConsumptionKWh ?? c.ConsumptionKwh ?? c.Delta ?? 0)
+          : (c.Consumption ?? c.Delta ?? 0)) : 0;
+        lastTableDataCompare.push({date: dtCmp.date, time: dtCmp.time, consumption: v2});
+      } else {
+        const compCons = c?.Delta ?? 0;
+        const compFeed = c ? (feedIdx2.get(c.Timestamp)?.Delta ?? 0) : 0;
+        lastTableDataCompare.push({date: dtCmp.date, time: dtCmp.time, consumption: compCons, feedin: compFeed});
+      }
+    }
+  }
+
+  let html = '';
+  const mainLbl = periodLabelForPicker(pickers[0]) || 'Zeitraum 1';
+  html += renderTableBlock(mainLbl, lastTableDataMain, {isGas:isGasDevice, gasUnit, exportKey:'main'});
+
+  if(compareActive){
+    const cmpLbl = periodLabelForPicker(pickers[1]) || 'Zeitraum 2 (Vergleich)';
+    html += renderTableBlock(cmpLbl, lastTableDataCompare, {isGas:isGasDevice, gasUnit, exportKey:'compare'});
+  }
+
+  tableContainer.innerHTML = html;
+
+  tableContainer.querySelectorAll('button[data-export]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const key = e.currentTarget.getAttribute('data-export');
+      downloadCsv(key);
+    });
+  });
+}
+
+function downloadCsv(which){
+  const rows = which === 'compare' ? lastTableDataCompare : lastTableDataMain;
+  if(!rows || rows.length===0){
+    alert('Keine Daten vorhanden – bitte erst Datentabelle laden.');
+    return;
+  }
+
+  let header = [];
+  if(isGasDevice){
+    header = ['Datum','Uhrzeit',`Verbrauch [${(gasUnit==='m3'?'m³':'kWh')}]`];
+  } else {
+    header = ['Datum','Uhrzeit','Verbrauch [kWh]','Einspeisung [kWh]'];
+  }
+
+  const fmt3 = v => Number(v ?? 0).toFixed(3);
+  const lines = [];
+  lines.push(header.join(';'));
+
+  for(const r of rows){
+    if(isGasDevice){
+      lines.push([r.date||'', r.time||'', fmt3(r.consumption)].join(';'));
+    } else {
+      lines.push([r.date||'', r.time||'', fmt3(r.consumption), fmt3(r.feedin)].join(';'));
+    }
+  }
+
+  const csvText = lines.join('\n');
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const dev = selectedDevice || 'device';
+  const suffix = which === 'compare' ? '_vergleich' : '';
+  const fname = `${dev}_${stamp}_energie${suffix}.csv`;
+
+  const blob = new Blob([csvText], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+async function updateVisualization(){
+  if(!selectedDevice) return;
+
+  loadingIndicator.style.visibility = 'visible';
+
+  const selOpt = devicesDropdown.options[devicesDropdown.selectedIndex];
+  const division = Number(selOpt?.dataset?.division);
+  isGasDevice = (division === 4);
+
+  gasSwitchContainer.style.display = isGasDevice ? 'flex' : 'none';
+  updateChartTitle();
+
+  async function fetchReportForPicker(picker){
+    const y = picker.year, m = picker.month, d = picker.day;
+    let url = apiUrl + selectedDevice + '/report';
+    if(y && !m) url += `?year=${y}`;
+    else if(y && m && !d) url += `?year=${y}&month=${m}`;
+    else if(y && m && d) url += `?year=${y}&month=${m}&day=${d}`;
+    return fetchJSON(url);
+  }
+
+  let data1 = null, data2 = null;
+
+  try{
+    data1 = await fetchReportForPicker(pickers[0]);
+  }catch(e){
+    loadingIndicator.style.visibility = 'hidden';
+    alert("Fehler beim Laden der Daten: "+e.message);
+    return;
+  }
+
+  if(!isGasDevice && !data1.FeedIn) data1.FeedIn = {Sum:0,Max:0,ReportValues:[]};
+  if(isGasDevice && !data1.Gas) data1.Gas = {Sum:0,ReportValues:[]};
+
+  // HT/NT-Erkennung (nur Strom / Consumption)
+  isHtNtDevice = false;
+  try{
+    if(!isGasDevice){
+      const rv = data1?.Consumption?.ReportValues;
+      if(Array.isArray(rv) && rv.length){
+        const any = rv.find(x => x && (typeof x === 'object'));
+        if(any && ('DeltaHT' in any) && ('DeltaNT' in any)) isHtNtDevice = true;
+      }
+    }
+  }catch(_e){
+    isHtNtDevice = false;
+  }
+
+  if(htntBtn){
+    htntBtn.style.display = isHtNtDevice ? 'inline-flex' : 'none';
+  }
+
+  if(compareActive && pickers[1]){
+    try{
+      data2 = await fetchReportForPicker(pickers[1]);
+      if(!isGasDevice && data2 && !data2.FeedIn) data2.FeedIn = {Sum:0,Max:0,ReportValues:[]};
+      if(isGasDevice && data2 && !data2.Gas) data2.Gas = {Sum:0,ReportValues:[]};
+    }catch(e){
+      data2 = null;
+    }
+  }
+
+  renderChart(data1, data2);
+
+  loadingIndicator.style.visibility = 'hidden';
+}
+
+/* Initialisierung / Event-Handler */
+
+toggleTableBtn.addEventListener('click', () => {
+  if(tableContainer.style.display === 'block'){
+    tableContainer.style.display = 'none';
+    toggleTableBtn.textContent = 'Datentabelle laden';
+    return;
+  }
+  tableContainer.style.display = 'block';
+  toggleTableBtn.textContent = 'Datentabelle ausblenden';
+  updateVisualization();
+});
+
+(function init(){
+  setInitialPickerToToday();
+  buildRollPicker();
+  loadDevices();
+})();
+</script>
+
+</body>
+</html>

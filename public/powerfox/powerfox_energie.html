@@ -124,6 +124,18 @@
   </div>
 
 <script>
+/**
+ * Anpassungen für Demo:
+ * - demoMode = localStorage.demoMode === "1"
+ * - Devices im Demo aus demo/devices.json
+ * - Reports im Demo aus demo/<DeviceId>/YYYY-MM-DD.json (TAGES-Ansicht)
+ *   Für Monat/Jahr wird automatisch auf vorhandene Tagesdateien aggregiert (best-effort).
+ *
+ * Voraussetzung:
+ * - public/powerfox/demo/devices.json existiert
+ * - pro Demo-Device: public/powerfox/demo/<DeviceId>/YYYY-MM-DD.json existiert (API-like report shape)
+ */
+
 const apiUrl               = 'https://backend.powerfox.energy/api/2.0/my/';
 const devicesDropdown      = document.getElementById('devices');
 const chartSvg             = document.getElementById('chart');
@@ -138,6 +150,22 @@ const gasSwitchContainer   = document.getElementById('gas-switch-container');
 const gasSwitchBtn         = document.getElementById('gas-switch-btn');
 const logoutBtn            = document.getElementById('logoutBtn');
 const htntBtn              = document.getElementById('htnt-btn');
+
+const DEMO = {
+  devicesPath: 'demo/devices.json',
+  baseDevicePath: 'demo', // demo/<DeviceId>/YYYY-MM-DD.json
+  storageDemoMode: 'demoMode',
+  storageDemoDeviceId: 'demoDeviceId'
+};
+
+function isDemoMode(){
+  return localStorage.getItem(DEMO.storageDemoMode) === '1';
+}
+
+function endDemoMode(){
+  localStorage.removeItem(DEMO.storageDemoMode);
+  localStorage.removeItem(DEMO.storageDemoDeviceId);
+}
 
 let selectedDevice = null;
 let isGasDevice = false;
@@ -163,8 +191,13 @@ let isHtNtDevice = false;
 
 if(logoutBtn){
   logoutBtn.addEventListener('click', function(){
+    // Live logout
     localStorage.removeItem('credentials');
     localStorage.removeItem('devices');
+
+    // Demo soll mit Abmelden ebenfalls beendet werden
+    endDemoMode();
+
     location.href = 'index.html';
   });
 }
@@ -503,10 +536,23 @@ function setInitialPickerToToday(){
 function getCredentials(){ return localStorage.getItem('credentials'); }
 function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
 
-async function fetchJSON(url){
+async function fetchJSON(url, opts = {}){
+  const demo = isDemoMode();
+
+  // Demo: ohne Auth-Header
+  if(demo){
+    const res = await fetch(url, Object.assign({ cache: 'no-store' }, opts));
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    return res.json();
+  }
+
+  // Live: Credentials nötig
   const creds = getCredentials();
   if(!creds){ alert("Nicht angemeldet."); location.href="index.html"; throw new Error("no creds"); }
-  const res = await fetch(url,{headers: AUTH_HEADER()});
+
+  const headers = Object.assign({}, opts.headers || {}, AUTH_HEADER());
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+
   if(res.status===401||res.status===403){
     localStorage.removeItem('credentials');
     localStorage.removeItem('devices');
@@ -517,22 +563,154 @@ async function fetchJSON(url){
   return res.json();
 }
 
+// --- Demo Helpers (Energie-Report) ---
+
+function formatYYYYMMDD(y, m, d){
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+
+function demoReportPath(deviceId, yyyy_mm_dd){
+  // demo/<DeviceId>/YYYY-MM-DD.json
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${yyyy_mm_dd}.json`;
+}
+
+// Try to load a demo day report; return null if missing
+async function tryLoadDemoDayReport(deviceId, y, m, d){
+  const path = demoReportPath(deviceId, formatYYYYMMDD(y, m, d));
+  try{
+    return await fetchJSON(path);
+  }catch(e){
+    return null;
+  }
+}
+
+// Aggregate day reports into month report (best-effort)
+async function buildDemoMonthReport(deviceId, y, m){
+  const maxD = new Date(y, m, 0).getDate();
+  const dayReports = [];
+  for(let d=1; d<=maxD; d++){
+    const rep = await tryLoadDemoDayReport(deviceId, y, m, d);
+    if(rep) dayReports.push(rep);
+  }
+  if(dayReports.length === 0) throw new Error(`Keine Demo-Daten für ${y}-${pad(m)} vorhanden.`);
+
+  // Aggregate by summing daily values and keeping day-level timestamps from reports.
+  // We assume each day report contains Consumption.ReportValues (hourly) and optional FeedIn.ReportValues.
+  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
+
+  // For month view in this UI, it expects Consumption.ReportValues containing entries at day granularity
+  // with Timestamp values that map to that day in berlinPartsFromUtcTs.
+  // We'll create synthetic day-entries by summing all entries of each day.
+  for(const rep of dayReports){
+    const c = rep?.Consumption?.ReportValues || [];
+    const f = rep?.FeedIn?.ReportValues || [];
+
+    if(c.length){
+      const tsAny = c[0].Timestamp; // any hourly ts from that day
+      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.Consumption.ReportValues.push({ Timestamp: tsAny, Delta: sumC });
+      out.Consumption.Sum += sumC;
+      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
+    }
+    if(f.length){
+      const tsAnyF = f[0].Timestamp;
+      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.FeedIn.ReportValues.push({ Timestamp: tsAnyF, Delta: sumF });
+      out.FeedIn.Sum += sumF;
+      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
+    }
+  }
+
+  // Sort by timestamp
+  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+
+  // If report lacks FeedIn but consumption exists, keep shape consistent
+  if(!out.FeedIn) out.FeedIn = { Sum:0, Max:0, ReportValues:[] };
+  return out;
+}
+
+// Aggregate month reports into year report (best-effort)
+async function buildDemoYearReport(deviceId, y){
+  const monthReports = [];
+  for(let m=1; m<=12; m++){
+    try{
+      const repM = await buildDemoMonthReport(deviceId, y, m);
+      monthReports.push({ m, rep: repM });
+    }catch(_e){
+      // skip months without data
+    }
+  }
+  if(monthReports.length === 0) throw new Error(`Keine Demo-Daten für ${y} vorhanden.`);
+
+  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
+
+  for(const mr of monthReports){
+    const c = mr.rep?.Consumption?.ReportValues || [];
+    const f = mr.rep?.FeedIn?.ReportValues || [];
+    if(c.length){
+      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.Consumption.ReportValues.push({ Timestamp: c[0].Timestamp, Delta: sumC });
+      out.Consumption.Sum += sumC;
+      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
+    }
+    if(f.length){
+      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.FeedIn.ReportValues.push({ Timestamp: f[0].Timestamp, Delta: sumF });
+      out.FeedIn.Sum += sumF;
+      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
+    }
+  }
+
+  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  return out;
+}
+
 async function loadDevices(){
   devicesDropdown.innerHTML = '<option>Lade Geräte...</option>';
   try{
-    const dev = await fetchJSON(apiUrl+'all/devices');
+    let dev = null;
+
+    if(isDemoMode()){
+      dev = await fetchJSON(DEMO.devicesPath);
+    } else {
+      dev = await fetchJSON(apiUrl+'all/devices');
+    }
+
     if(!Array.isArray(dev) || dev.length===0){
       devicesDropdown.innerHTML = '<option value="">Keine Geräte</option>';
       return;
     }
-    devicesDropdown.innerHTML = dev.map(d=>`<option value="${d.DeviceId}" data-division="${d.Division}">${d.DeviceId}</option>`).join('');
-    selectedDevice = dev[0].DeviceId;
+
+    // For demo, allow remembering last selected demo device
+    const rememberedDemoId = localStorage.getItem(DEMO.storageDemoDeviceId);
+
+    devicesDropdown.innerHTML = dev.map(d=>{
+      const division = (d && typeof d.Division !== 'undefined') ? d.Division : '';
+      return `<option value="${d.DeviceId}" data-division="${division}">${d.DeviceId}</option>`;
+    }).join('');
+
+    if(isDemoMode() && rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
+      selectedDevice = rememberedDemoId;
+    } else {
+      selectedDevice = dev[0].DeviceId;
+      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+    }
+
     devicesDropdown.value = selectedDevice;
+
     devicesDropdown.onchange = ()=>{
       selectedDevice = devicesDropdown.value;
+      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
       updateChartTitle();
       updateVisualization();
     };
+
     updateChartTitle();
     updateVisualization();
   }catch(e){
@@ -564,6 +742,10 @@ function updateChartTitle(){
     if(main.year && !main.month) t += ` – ${main.year}`;
     if(main.year && main.month && !main.day) t += ` – ${monthNames[main.month-1]} ${main.year}`;
     if(main.year && main.month && main.day) t += ` – ${pad(main.day)}.${pad(main.month)}.${main.year}`;
+  }
+
+  if(isDemoMode()){
+    t += " (Demo)";
   }
 
   chartTitle.textContent = t;
@@ -1231,6 +1413,8 @@ async function updateVisualization(){
 
   const selOpt = devicesDropdown.options[devicesDropdown.selectedIndex];
   const division = Number(selOpt?.dataset?.division);
+
+  // In Demo kann Division fehlen -> default 1 (Strom)
   isGasDevice = (division === 4);
 
   gasSwitchContainer.style.display = isGasDevice ? 'flex' : 'none';
@@ -1238,6 +1422,23 @@ async function updateVisualization(){
 
   async function fetchReportForPicker(picker){
     const y = picker.year, m = picker.month, d = picker.day;
+
+    if(isDemoMode()){
+      if(y && m && d){
+        const rep = await tryLoadDemoDayReport(selectedDevice, y, m, d);
+        if(!rep) throw new Error(`Keine Demo-Daten für ${formatYYYYMMDD(y,m,d)} (${selectedDevice})`);
+        return rep;
+      }
+      if(y && m && !d){
+        return buildDemoMonthReport(selectedDevice, y, m);
+      }
+      if(y && !m){
+        return buildDemoYearReport(selectedDevice, y);
+      }
+      throw new Error('Ungültige Picker-Auswahl.');
+    }
+
+    // Live API
     let url = apiUrl + selectedDevice + '/report';
     if(y && !m) url += `?year=${y}`;
     else if(y && m && !d) url += `?year=${y}&month=${m}`;

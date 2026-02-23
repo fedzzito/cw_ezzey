@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Roadmaps + ToDos</title>
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#52637a;
+      --line:#e5eaf2;
+      --shadow: 0 12px 28px rgba(15,23,42,.10);
+      --radius: 16px;
+
+      --green:#16a34a;
+      --yellow:#f59e0b;
+      --red:#ef4444;
+
+      --tooltip-bg:#0b1220;
+      --tooltip-text:#f8fafc;
+
+      --ms-blue-bg: rgba(59,130,246,.07);
+      --ms-blue-border: rgba(59,130,246,.18);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
+      background: radial-gradient(900px 600px at 20% 0%, #eaf2ff 0%, transparent 60%),
+                  radial-gradient(900px 600px at 90% 10%, #ffeaf3 0%, transparent 55%),
+                  var(--bg);
+      color: var(--text);
+    }
+    .wrap{
+      max-width: 1060px;
+      margin: 22px auto;
+      padding: 0 16px 70px;
+    }
+
+    header{
+      display:flex;
+      gap:14px;
+      align-items:flex-start;
+      justify-content:space-between;
+      margin-bottom: 14px;
+    }
+    h1{
+      margin:0;
+      font-size: 20px;
+      letter-spacing:.2px;
+    }
+    .sub{ display:none; }
+    .top-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+      align-items:center;
+    }
+    button{
+      appearance:none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size: 13px;
+      box-shadow: 0 6px 14px rgba(15,23,42,.06);
+    }
+    button:hover{ transform: translateY(-1px); }
+    button:active{ transform: translateY(0); }
+
+    .btn-primary{
+      border-color: rgba(22,163,74,.25);
+      background: rgba(22,163,74,.10);
+    }
+    .btn-danger{
+      border-color: rgba(239,68,68,.25);
+      background: rgba(239,68,68,.10);
+    }
+    .btn-ghost{
+      background: transparent;
+      box-shadow:none;
+    }
+    .btn-ms{
+      border-color: var(--ms-blue-border);
+      background: var(--ms-blue-bg);
+    }
+
+    /* unified top buttons */
+    .top-btn{
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: 0 6px 14px rgba(15,23,42,.06);
+    }
+    .top-btn.green{
+      border-color: rgba(22,163,74,.25);
+      background: rgba(22,163,74,.10);
+    }
+    .top-btn.yellow{
+      border-color: rgba(245,158,11,.25);
+      background: rgba(245,158,11,.10);
+    }
+    .top-btn.red{
+      border-color: rgba(239,68,68,.25);
+      background: rgba(239,68,68,.10);
+    }
+
+    input[type="file"]{ display:none; }
+
+    .grid{
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+    }
+
+    .card{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+
+    .card-head{
+      padding: 14px 14px 10px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .title-area{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width:0;
+      flex:1;
+      position:relative;
+    }
+
+    .chev{
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      display:grid;
+      place-items:center;
+      font-weight: 900;
+      color: var(--muted);
+      cursor:pointer;
+      user-select:none;
+      flex-shrink:0;
+    }
+    .chev:hover{ transform: translateY(-1px); }
+    .chev:active{ transform: translateY(0); }
+
+    .title-click{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+      flex:1;
+    }
+
+    .inline-input{
+      width:100%;
+      min-width: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      outline:none;
+      padding: 4px 6px;
+      border-radius: 10px;
+      font-weight: 900;
+      letter-spacing:.2px;
+    }
+    .inline-input:focus{
+      border-color: var(--line);
+      background: #fff;
+      box-shadow: 0 6px 14px rgba(15,23,42,.06);
+    }
+    .inline-input.todo{
+      font-weight: 700;
+      letter-spacing: 0;
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 12px;
+    }
+
+    .pct{
+      flex-shrink:0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .head-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-shrink:0;
+    }
+    .iconbtn{
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      padding:0;
+      display:grid;
+      place-items:center;
+      font-weight:900;
+    }
+    .iconbtn.trash{
+      color: #000;
+      font-size: 18px;
+    }
+
+    .bar-row{
+      padding: 0 14px 14px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .bar-drag{
+      user-select:none;
+      cursor: grab;
+      color: var(--muted);
+      font-weight:900;
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      display:grid;
+      place-items:center;
+      flex-shrink:0;
+    }
+
+    .bar{
+      position:relative;
+      height: 29px; /* 75% von 39 */
+      border-radius: var(--radius);
+      overflow:hidden;
+      border: 1px solid rgba(15,23,42,.08);
+      background: rgba(15,23,42,.04);
+      cursor:pointer;
+      display:flex;
+      flex:1;
+    }
+    .ms-seg{
+      position:relative;
+      flex:1;
+      display:flex;
+      height:100%;
+      border-right: 1px solid rgba(255,255,255,.35);
+      min-width: 40px;
+    }
+    .ms-seg:last-child{ border-right: none; }
+    .ms-part{ height:100%; }
+    .ms-part.green{ background: rgba(22,163,74,.95); }
+    .ms-part.yellow{ background: rgba(245,158,11,.95); }
+    .ms-part.red{ background: rgba(239,68,68,.95); }
+
+    .ms-tooltip{
+      position:absolute;
+      left: 50%;
+      top: 36px;
+      transform: translateX(-50%);
+      background: var(--tooltip-bg);
+      color: var(--tooltip-text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      box-shadow: 0 16px 40px rgba(0,0,0,.20);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .12s ease;
+      z-index: 5;
+      white-space: nowrap;
+      border: 1px solid rgba(255,255,255,.10);
+    }
+    .ms-seg:hover .ms-tooltip{ opacity:1; }
+
+    .bar-hint{ display:none; }
+
+    .body{
+      display:none;
+      padding: 14px;
+      border-top: 1px solid var(--line);
+      background: linear-gradient(#ffffff, #fbfdff);
+    }
+    .card.open .body{ display:block; }
+
+    .section{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .panel{
+      border: 1px solid var(--line);
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .panel h3{
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: rgba(15,23,42,.9);
+      letter-spacing:.2px;
+    }
+
+    .milestone{
+      border: 1px solid var(--ms-blue-border);
+      border-radius: 14px;
+      background: var(--ms-blue-bg);
+      overflow:hidden;
+    }
+    .milestone-head{
+      padding: 12px;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      justify-content:space-between;
+      background: rgba(59,130,246,.06);
+      border-bottom: 1px solid var(--ms-blue-border);
+    }
+    .ms-title-wrap{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+      flex:1;
+    }
+    .ms-body{ display:none; }
+    .milestone.open .ms-body{ display:block; }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .todo{
+      border: 1px solid var(--line);
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 10px;
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      justify-content:space-between;
+    }
+    .todo.done{ background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25); }
+    .todo.doing{ background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.25); }
+    .todo.open{ background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.22); }
+
+    .todo-left{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      min-width:0;
+      flex:1;
+    }
+    .todo-drag{
+      user-select:none;
+      cursor: grab;
+      font-weight:900;
+      color: var(--muted);
+      padding: 4px 6px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      line-height: 1;
+    }
+
+    .todo-actions{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-shrink:0;
+    }
+
+    .status-dot{
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1px solid rgba(15,23,42,.18);
+      box-shadow: 0 4px 10px rgba(15,23,42,.08);
+      display:inline-block;
+    }
+    .status-dot.red{ background: rgba(239,68,68,.95); }
+    .status-dot.yellow{ background: rgba(245,158,11,.95); }
+    .status-dot.green{ background: rgba(22,163,74,.95); }
+
+    .hint{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .empty{
+      padding: 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .card.drag-over{
+      outline: 3px solid rgba(82,99,122,.18);
+      outline-offset: 0px;
+    }
+
+    /* floating donate */
+    .donate-float{
+      position: fixed;
+      right: 16px;
+      top: 16px;
+      z-index: 999;
+    }
+    .donate-btn{
+      border-color: rgba(15,23,42,.12);
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(6px);
+      box-shadow: 0 12px 28px rgba(15,23,42,.14);
+    }
+  </style>
+</head>
+<body>
+  <div class="donate-float" aria-label="Spenden und Feedback">
+    <form action="https://www.paypal.com/donate" method="post" target="_blank">
+      <input type="hidden" name="business" value="fedzzito@gmail.com">
+      <input type="hidden" name="currency_code" value="EUR">
+      <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
+    </form>
+  </div>
+
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Roadmaps + ToDos</h1>
+        <div class="sub">—</div>
+      </div>
+      <div class="top-actions">
+        <button class="top-btn green" id="addRoadmapBtn">+ Roadmap</button>
+        <button class="top-btn yellow" id="exportBtn">Export JSON</button>
+        <label for="importFile" class="top-btn yellow" style="cursor:pointer; display:inline-block; padding:10px 12px; border-radius:12px; font-weight:700; font-size:13px; border:1px solid var(--line); box-shadow:0 6px 14px rgba(15,23,42,.06);">Import JSON</label>
+        <input id="importFile" type="file" accept="application/json" />
+        <button class="top-btn red" id="resetBtn">Reset</button>
+      </div>
+    </header>
+
+    <div class="grid" id="roadmaps"></div>
+  </div>
+
+<script>
+(() => {
+  const KEY = "roadmap_todo_app_v1";
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const escapeHtml = (s) =>
+    String(s ?? "")
+      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return { roadmaps: [] };
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.roadmaps)) return { roadmaps: [] };
+
+      data.roadmaps.forEach(r => {
+        if (typeof r.open !== "boolean") r.open = false;
+        if (!Array.isArray(r.milestones)) r.milestones = [];
+        r.milestones.forEach(m => {
+          delete m.date;
+          if (typeof m.open !== "boolean") m.open = false;
+          if (!Array.isArray(m.todos)) m.todos = [];
+          m.todos.forEach(t => { if (!t.status) t.status = "todo"; });
+        });
+      });
+      return data;
+    }catch{
+      return { roadmaps: [] };
+    }
+  }
+  function save(state){ localStorage.setItem(KEY, JSON.stringify(state)); }
+  let state = load();
+
+  function clamp(n,a,b){ return Math.max(a, Math.min(b,n)); }
+
+  function milestoneKpis(ms){
+    const total = (ms.todos||[]).length;
+    const done = (ms.todos||[]).filter(t => t.status === "done").length;
+    const doing = (ms.todos||[]).filter(t => t.status === "doing").length;
+    const open = total - done - doing;
+    return { total, done, doing, open };
+  }
+  function milestoneBarParts(ms){
+    const { total, done, doing } = milestoneKpis(ms);
+    if (total <= 0) return { green:0, yellow:0, red:100 };
+    const green = (done / total) * 100;
+    const yellow = (doing / total) * 100;
+    const red = clamp(100 - green - yellow, 0, 100);
+    return { green, yellow, red };
+  }
+  function roadmapBarPct(rm){
+    const ms = rm.milestones || [];
+    if (!ms.length) return 0;
+    const sumGreen = ms.reduce((acc, m) => acc + (milestoneBarParts(m).green || 0), 0);
+    return Math.round(sumGreen / ms.length);
+  }
+
+  function addRoadmap(){
+    const name = prompt("Roadmap-Name?");
+    if (!name) return;
+    state.roadmaps.unshift({
+      id: uid(),
+      name: name.trim(),
+      createdAt: new Date().toISOString(),
+      open: false,
+      milestones: []
+    });
+    save(state); render();
+  }
+  function deleteRoadmap(id){
+    const rm = state.roadmaps.find(r => r.id === id);
+    if (!rm) return;
+    if (!confirm(`Roadmap wirklich löschen?\n\n"${rm.name}"`)) return;
+    state.roadmaps = state.roadmaps.filter(r => r.id !== id);
+    save(state); render();
+  }
+  function toggleOpen(id){
+    const rm = state.roadmaps.find(r => r.id === id);
+    if (!rm) return;
+    rm.open = !rm.open;
+    save(state); render();
+  }
+
+  function addMilestone(roadmapId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    if (!rm) return;
+    const name = prompt("Meilenstein-Name?");
+    if (!name) return;
+    rm.milestones.push({ id: uid(), name: name.trim(), open: false, todos: [] });
+    rm.open = true;
+    save(state); render();
+  }
+  function deleteMilestone(roadmapId, msId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    if (!rm) return;
+    const ms = rm.milestones.find(m => m.id === msId);
+    if (!ms) return;
+    if (!confirm(`Meilenstein wirklich löschen?\n\n"${ms.name}"`)) return;
+    rm.milestones = rm.milestones.filter(m => m.id !== msId);
+    save(state); render();
+  }
+  function toggleMilestone(roadmapId, msId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    const ms = rm?.milestones?.find(m => m.id === msId);
+    if (!ms) return;
+    ms.open = !ms.open;
+    save(state); render();
+  }
+
+  function addTodo(roadmapId, msId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    const ms = rm?.milestones?.find(m => m.id === msId);
+    if (!ms) return;
+
+    const text = prompt("ToDo:");
+    if (!text) return;
+
+    ms.todos.push({ id: uid(), text: text.trim(), status: "todo" });
+    save(state); render();
+  }
+  function deleteTodo(roadmapId, msId, todoId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    const ms = rm?.milestones?.find(m => m.id === msId);
+    if (!ms) return;
+    if (!confirm("ToDo wirklich löschen?")) return;
+    ms.todos = ms.todos.filter(t => t.id !== todoId);
+    save(state); render();
+  }
+  function cycleTodoStatus(roadmapId, msId, todoId){
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    const ms = rm?.milestones?.find(m => m.id === msId);
+    const td = ms?.todos?.find(t => t.id === todoId);
+    if (!td) return;
+    td.status = td.status === "todo" ? "doing" : td.status === "doing" ? "done" : "todo";
+    save(state); render();
+  }
+
+  let dragRoadmapId = null;
+  function onRoadmapDragStart(e, roadmapId){
+    dragRoadmapId = roadmapId;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", roadmapId);
+  }
+  function onRoadmapDragOver(e){
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+  function onRoadmapDrop(e, targetRoadmapId){
+    e.preventDefault();
+    const sourceId = dragRoadmapId;
+    dragRoadmapId = null;
+    if (!sourceId || sourceId === targetRoadmapId) return;
+
+    const list = state.roadmaps;
+    const from = list.findIndex(r => r.id === sourceId);
+    const to = list.findIndex(r => r.id === targetRoadmapId);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    save(state); render();
+  }
+
+  let dragTodoCtx = null;
+  function onTodoDragStart(e, roadmapId, msId, todoId){
+    dragTodoCtx = { roadmapId, msId, todoId };
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", todoId);
+  }
+  function onTodoDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect = "move"; }
+  function onTodoDrop(e, targetTodoId){
+    e.preventDefault();
+    if (!dragTodoCtx) return;
+
+    const { roadmapId, msId, todoId } = dragTodoCtx;
+    dragTodoCtx = null;
+    if (todoId === targetTodoId) return;
+
+    const rm = state.roadmaps.find(r => r.id === roadmapId);
+    const ms = rm?.milestones?.find(m => m.id === msId);
+    if (!ms) return;
+
+    const list = ms.todos;
+    const from = list.findIndex(t => t.id === todoId);
+    const to = list.findIndex(t => t.id === targetTodoId);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    save(state); render();
+  }
+
+  function exportJSON(){
+    const cleaned = JSON.parse(JSON.stringify(state));
+    cleaned.roadmaps?.forEach(r => {
+      r.milestones?.forEach(m => { delete m.date; });
+    });
+
+    const blob = new Blob([JSON.stringify(cleaned, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "roadmaps_export.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function resetAll(){
+    if (!confirm("Wirklich alles löschen (Reset)?")) return;
+    state = { roadmaps: [] };
+    save(state);
+    render();
+  }
+  async function importJSONFile(file){
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || !Array.isArray(data.roadmaps)){
+        alert("Import fehlgeschlagen: JSON hat kein 'roadmaps' Array.");
+        return;
+      }
+
+      data.roadmaps.forEach(r => {
+        if (!r.id) r.id = uid();
+        if (!r.name) r.name = "Unbenannte Roadmap";
+        if (typeof r.open !== "boolean") r.open = false;
+        if (!Array.isArray(r.milestones)) r.milestones = [];
+        r.milestones.forEach(m => {
+          if (!m.id) m.id = uid();
+          if (!m.name) m.name = "Meilenstein";
+          delete m.date;
+          if (typeof m.open !== "boolean") m.open = false;
+          if (!Array.isArray(m.todos)) m.todos = [];
+          m.todos.forEach(t => {
+            if (!t.id) t.id = uid();
+            if (!t.text) t.text = "ToDo";
+            if (!t.status) t.status = "todo";
+            if (!["todo","doing","done"].includes(t.status)) t.status = "todo";
+          });
+        });
+      });
+
+      state = data;
+      save(state);
+      render();
+      alert("Import erfolgreich ✅");
+    }catch{
+      alert("Import fehlgeschlagen: Ungültige JSON-Datei.");
+    }
+  }
+
+  function statusClass(tdStatus){
+    if (tdStatus === "done") return { cls:"done", dot:"green" };
+    if (tdStatus === "doing") return { cls:"doing", dot:"yellow" };
+    return { cls:"open", dot:"red" };
+  }
+
+  function wireInlineInput(input, { onCommit }){
+    const commit = () => onCommit((input.value || "").trim());
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); render(); }
+    });
+    input.addEventListener("blur", commit);
+    input.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  function render(){
+    const root = $("#roadmaps");
+    root.innerHTML = "";
+
+    if (!state.roadmaps.length){
+      const empty = document.createElement("div");
+      empty.className = "card";
+      empty.innerHTML = `
+        <div class="empty">
+          Noch keine Roadmaps. Klicke oben auf <b>+ Roadmap</b> oder nutze <b>Import JSON</b>.
+        </div>
+      `;
+      root.appendChild(empty);
+      return;
+    }
+
+    state.roadmaps.forEach(rm => {
+      const pct = roadmapBarPct(rm);
+
+      const card = document.createElement("div");
+      card.className = "card" + (rm.open ? " open" : "");
+      card.dataset.roadmapId = rm.id;
+
+      const ms = rm.milestones || [];
+      const barHtml = ms.length
+        ? ms.map(m => {
+            const p = milestoneBarParts(m);
+            const tip = `<b>${escapeHtml(m.name)}</b>`;
+            return `
+              <div class="ms-seg">
+                <div class="ms-part green" style="width:${p.green}%"></div>
+                <div class="ms-part yellow" style="width:${p.yellow}%"></div>
+                <div class="ms-part red" style="width:${p.red}%"></div>
+                <div class="ms-tooltip">${tip}</div>
+              </div>
+            `;
+          }).join("")
+        : `
+          <div class="ms-seg" style="flex:1;">
+            <div class="ms-part red" style="width:100%"></div>
+            <div class="ms-tooltip"><b>Keine Meilensteine</b></div>
+          </div>
+        `;
+
+      card.innerHTML = `
+        <div class="card-head">
+          <div class="title-area">
+            <div class="chev" data-act="toggle" title="Öffnen/Schließen">${rm.open ? "▾" : "▸"}</div>
+            <div class="title-click">
+              <input class="inline-input" data-role="roadmap-name" value="${escapeHtml(rm.name)}" />
+              <div class="pct">${pct}% erledigt</div>
+            </div>
+          </div>
+          <div class="head-actions">
+            <button class="iconbtn btn-danger trash" data-act="delete" title="Löschen">🗑</button>
+          </div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-drag" draggable="true" data-act="drag-roadmap" title="Roadmap ziehen zum Sortieren">≡</div>
+          <div class="bar" data-act="toggle" title="Klick: öffnen/schließen">
+            ${barHtml}
+          </div>
+        </div>
+
+        <div class="body">
+          <div class="section">
+            <div class="row" style="justify-content:space-between;">
+              <div></div>
+              <button class="btn-ms" data-act="add-ms">+ Meilenstein</button>
+            </div>
+
+            <div class="section" style="gap:12px;">
+              ${ms.length ? ms.map(m => renderMilestone(rm.id, m)).join("") : `
+                <div class="panel">
+                  <h3>Keine Meilensteine</h3>
+                  <div class="hint">Lege einen Meilenstein an, dann kannst du darunter ToDos hinzufügen.</div>
+                </div>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+
+      card.addEventListener("dragover", (e) => { onRoadmapDragOver(e); card.classList.add("drag-over"); });
+      card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+      card.addEventListener("drop", (e) => { card.classList.remove("drag-over"); onRoadmapDrop(e, rm.id); });
+
+      card.addEventListener("click", (e) => {
+        const el = e.target.closest("[data-act]");
+        if (!el) return;
+        const act = el.dataset.act;
+
+        if (act === "toggle") return toggleOpen(rm.id);
+        if (act === "delete") return deleteRoadmap(rm.id);
+        if (act === "add-ms") return addMilestone(rm.id);
+
+        if (act === "ms-toggle") return toggleMilestone(rm.id, el.dataset.msid);
+        if (act === "del-ms") return deleteMilestone(rm.id, el.dataset.msid);
+        if (act === "add-todo") return addTodo(rm.id, el.dataset.msid);
+
+        if (act === "todo-status") return cycleTodoStatus(rm.id, el.dataset.msid, el.dataset.todoid);
+        if (act === "todo-del") return deleteTodo(rm.id, el.dataset.msid, el.dataset.todoid);
+      });
+
+      const handle = card.querySelector("[data-act='drag-roadmap']");
+      handle.addEventListener("dragstart", (e) => onRoadmapDragStart(e, rm.id));
+
+      card.querySelectorAll("[draggable='true'][data-todoid]").forEach(el => {
+        el.addEventListener("dragstart", (e) => onTodoDragStart(e, el.dataset.roadmapid, el.dataset.msid, el.dataset.todoid));
+      });
+      card.querySelectorAll("[data-drop='todo']").forEach(el => {
+        el.addEventListener("dragover", onTodoDragOver);
+        el.addEventListener("drop", (e) => onTodoDrop(e, el.dataset.todoid));
+      });
+
+      const rmName = card.querySelector('[data-role="roadmap-name"]');
+      wireInlineInput(rmName, {
+        onCommit: (val) => {
+          const next = val || rm.name || "Roadmap";
+          rm.name = next;
+          save(state);
+          render();
+        }
+      });
+
+      card.querySelectorAll('[data-role="ms-name"]').forEach(inp => {
+        const msId = inp.dataset.msid;
+        const msObj = rm.milestones.find(m => m.id === msId);
+        if (!msObj) return;
+
+        inp.readOnly = true;
+        inp.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          inp.readOnly = false;
+          inp.focus();
+          inp.setSelectionRange(inp.value.length, inp.value.length);
+        });
+        const relock = () => { inp.readOnly = true; };
+        inp.addEventListener("blur", relock);
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === "Escape") { inp.blur(); }
+        });
+
+        wireInlineInput(inp, {
+          onCommit: (val) => {
+            const next = val || msObj.name || "Meilenstein";
+            msObj.name = next;
+            save(state);
+            render();
+          }
+        });
+      });
+
+      card.querySelectorAll('[data-role="todo-text"]').forEach(inp => {
+        const msId = inp.dataset.msid;
+        const todoId = inp.dataset.todoid;
+        const msObj = rm.milestones.find(m => m.id === msId);
+        const tdObj = msObj?.todos?.find(t => t.id === todoId);
+        if (!tdObj) return;
+        wireInlineInput(inp, {
+          onCommit: (val) => {
+            const next = val || tdObj.text || "ToDo";
+            tdObj.text = next;
+            save(state);
+            render();
+          }
+        });
+      });
+
+      root.appendChild(card);
+    });
+  }
+
+  function renderMilestone(roadmapId, m){
+    const mk = milestoneKpis(m);
+    const statusLine = `${mk.done} · ${mk.doing} · ${mk.open} · ${mk.total}`;
+    const todosHtml = (m.todos||[]).length
+      ? (m.todos||[]).map(td => {
+          const s = statusClass(td.status);
+          return `
+            <div class="todo ${s.cls}" draggable="true"
+                 data-drop="todo"
+                 data-roadmapid="${roadmapId}"
+                 data-msid="${m.id}"
+                 data-todoid="${td.id}">
+              <div class="todo-left">
+                <div class="todo-drag" title="ziehen">⠿</div>
+                <input class="inline-input todo" data-role="todo-text" data-msid="${m.id}" data-todoid="${td.id}" value="${escapeHtml(td.text)}" />
+              </div>
+              <div class="todo-actions">
+                <button class="iconbtn btn-ghost" data-act="todo-status" data-msid="${m.id}" data-todoid="${td.id}" title="Status wechseln">
+                  <span class="status-dot ${s.dot}"></span>
+                </button>
+                <button class="iconbtn btn-danger trash" data-act="todo-del" data-msid="${m.id}" data-todoid="${td.id}" title="Löschen">🗑</button>
+              </div>
+            </div>
+          `;
+        }).join("")
+      : `<div class="hint">Noch keine ToDos.</div>`;
+
+    return `
+      <div class="milestone ${m.open ? "open" : ""}">
+        <div class="milestone-head">
+          <div class="ms-title-wrap">
+            <div class="chev" data-act="ms-toggle" data-msid="${m.id}" title="Öffnen/Schließen">${m.open ? "▾" : "▸"}</div>
+            <input class="inline-input" data-role="ms-name" data-msid="${m.id}" value="${escapeHtml(m.name)}" />
+          </div>
+          <div class="head-actions">
+            <button class="iconbtn btn-ghost" data-act="add-todo" data-msid="${m.id}" title="ToDo hinzufügen">＋</button>
+            <button class="iconbtn btn-danger trash" data-act="del-ms" data-msid="${m.id}" title="Meilenstein löschen">🗑</button>
+          </div>
+        </div>
+        <div class="ms-meta" style="padding: 10px 12px 0; display:none;">${statusLine}</div>
+        <div class="ms-body">
+          <div class="list">
+            ${todosHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  $("#addRoadmapBtn").addEventListener("click", addRoadmap);
+  $("#exportBtn").addEventListener("click", exportJSON);
+  $("#resetBtn").addEventListener("click", resetAll);
+  $("#importFile").addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    importJSONFile(f);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -77,12 +77,36 @@
     const energiedatenKachel = document.getElementById('energiedatenKachel');
     const leistungswertKachel = document.getElementById('leistungswertKachel');
     const hintCard = document.getElementById('hintCard');
+    const demoBtn = document.getElementById('demoBtn');
 
-    // Helper: update UI based on presence of credentials
+    function isDemoMode(){
+      return localStorage.getItem('demoMode') === '1';
+    }
+
+    function clearDemoState(){
+      // demoMode + optional gemerkte Demo-Auswahl löschen
+      localStorage.removeItem('demoMode');
+      localStorage.removeItem('demoDeviceId');
+    }
+
+    // Helper: update UI based on presence of credentials OR demo mode
     function refreshAuthUI(){
       const creds = localStorage.getItem('credentials');
+      const demo = isDemoMode();
+
+      if(demo){
+        // Demo: Login UI ausblenden, Abmelden anzeigen
+        loginForm.style.display = 'none';
+        if(hintCard) hintCard.style.display = 'none';
+        logoutBtn.style.display = 'inline-flex';
+
+        // optional: Button-Text anpassen (rein UI)
+        if(demoBtn) demoBtn.textContent = 'Demo aktiv';
+        return;
+      }
+
+      // Live: bisheriges Verhalten
       if(creds){
-        // hide login form and hint if credentials available
         loginForm.style.display = 'none';
         if(hintCard) hintCard.style.display = 'none';
         logoutBtn.style.display = 'inline-flex';
@@ -91,17 +115,24 @@
         if(hintCard) hintCard.style.display = 'block';
         logoutBtn.style.display = 'none';
       }
+
+      if(demoBtn) demoBtn.textContent = 'Demo starten';
     }
 
     // Initialize UI
     refreshAuthUI();
 
-    // Login handler - behavior unchanged
+    // Login handler - behavior unchanged (endet aber Demo, weil Live-Login Vorrang hat)
     loginForm.addEventListener('submit', async function(event){
       event.preventDefault();
+
+      // Wenn ein echter Login gemacht wird: Demo aus
+      clearDemoState();
+
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       if(!email || !password){ alert('Bitte E‑Mail und Passwort eingeben.'); return; }
+
       const credentials = btoa(`${email}:${password}`);
       try{
         const res = await fetch('https://backend.powerfox.energy/api/2.0/my/all/devices', {
@@ -109,35 +140,40 @@
         });
         if(!res.ok) throw new Error('HTTP ' + res.status);
         const devices = await res.json();
+
         // store credentials and devices locally (other pages rely on these keys)
         localStorage.setItem('credentials', credentials);
         localStorage.setItem('devices', JSON.stringify(devices));
-        // update UI: hide login and hint as requested
+
         refreshAuthUI();
         console.log('Login erfolgreich, Geräte:', devices);
-        // optional: navigate to energia page after login if devices exist
-        // if(devices && devices.length) location.href = 'powerfox_energie.html';
       }catch(err){
         console.error('Login fehlgeschlagen:', err);
         alert('Login fehlgeschlagen. Bitte Zugangsdaten prüfen.');
       }
     });
 
-    // Logout - behavior unchanged
+    // Logout - beendet Live UND Demo
     logoutBtn.addEventListener('click', function(){
       localStorage.removeItem('credentials');
       localStorage.removeItem('devices');
+      clearDemoState();
       refreshAuthUI();
-      // reload to ensure other pages pick up the change if opened
       location.reload();
     });
 
     // Demo mode
-    document.getElementById('demoBtn').addEventListener('click', function(){
+    demoBtn.addEventListener('click', function(){
+      // Demo aktivieren
       localStorage.setItem('demoMode', '1');
+
+      // Live-Daten/Session entfernen, damit eindeutig Demo läuft
       localStorage.removeItem('credentials');
       localStorage.removeItem('devices');
-      location.href = 'powerfox_htnt.html';
+
+      // WICHTIG: NICHT auf HT/NT weiterleiten.
+      // Du willst nach Demo-Start auf dieser Tool-Auswahl-Seite bleiben.
+      refreshAuthUI();
     });
 
     // Kachel navigation (click and keyboard activation)
@@ -155,6 +191,9 @@
 
     // On page load, if credentials exist but devices not loaded, try to fetch devices quietly
     (async function prefetchDevicesIfMissing(){
+      // Im Demo niemals versuchen Live-Devices zu prefetch'en
+      if(isDemoMode()) return;
+
       const creds = localStorage.getItem('credentials');
       if(!creds) return;
       const devicesStored = localStorage.getItem('devices');

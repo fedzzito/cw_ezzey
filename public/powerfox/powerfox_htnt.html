@@ -65,13 +65,31 @@
       --ht-blue: #0070ba;
       --nt-brown: #8b5a2b;
     }
+
+    /* (1) Extra Platz oben, damit fixed donate button (top-right) die erste Karte nicht überdeckt */
+    .container { padding-top: 74px; }
+
+    /* Header actions block */
+    .header-actions{ display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
   <div class="app">
     <header class="site-header" role="banner" aria-label="Seitenkopf">
       <h1>HT/NT Energiedaten-Dashboard</h1>
-      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+
+      <!-- (2) ezzey.de links neben Abmelden -->
+      <div class="header-actions">
+        <button
+          id="ezzeyBtn"
+          class="btn"
+          type="button"
+          onclick="window.open('https://cw-ezzey.pages.dev/','_blank')"
+        >
+          ezzey.de
+        </button>
+        <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+      </div>
     </header>
 
     <main class="container" role="main">
@@ -91,10 +109,6 @@
         <div class="device-right">
           <button class="wechsel-btn btn" onclick="location.href='powerfox_csv.html'">
             zu CSV-Download wechseln
-          </button>
-
-          <button class="wechsel-btn btn" type="button" onclick="window.open('https://ezzey.de/','_blank')">
-            ezzey.de
           </button>
 
           <button class="wechsel-btn btn" onclick="location.href='powerfox_energie.html'">
@@ -175,6 +189,13 @@ function applyDemoFirstLoadDateIfNeeded(){
   pickers[0].day = 1;
 
   localStorage.setItem(DEMO.storageHtntDemoInitialized, '1');
+}
+
+/* (3) Demo: fix auf Stromzähler + 01.01.2026 */
+function applyDemoDeviceDefault(){
+  if(!isDemoMode()) return;
+  selectedDevice = 'Stromzähler';
+  localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
 }
 
 let selectedDevice = null;
@@ -553,6 +574,13 @@ function ntValueFor(entry){
   return Number(entry.DeltaNT ?? 0) || 0;
 }
 
+function pctText(part, total){
+  const t = Number(total ?? 0);
+  if(t <= 0) return '0%';
+  const p = (Number(part ?? 0) / t) * 100;
+  return `${Math.round(p)}%`;
+}
+
 function renderNoDataMessage(msg){
   const svg = d3.select(chartSvg);
   svg.selectAll("*").remove();
@@ -586,7 +614,6 @@ function renderChart(data1){
   const cons = data1?.Consumption?.ReportValues || [];
   const main = pickers[0];
 
-  // HT/NT nur Strom sinnvoll - im Demo ignorieren wir Division (du hast nur Stromzähler)
   if(isGasDevice){
     renderNoDataMessage('Dieses Gerät ist ein Gas-Gerät (keine HT/NT-Auswertung verfügbar).');
     lastTableDataMain = [];
@@ -594,10 +621,6 @@ function renderChart(data1){
     return;
   }
 
-  // Domain + mapping nach Picker-Level:
-  // - Jahr: x=1..12 -> entry mit Berlin-Monat
-  // - Monat: x=1..maxDay -> entry mit Berlin-Tag
-  // - Tag:   x=Stundenlabels -> entry mit Berlin-Stunde (nur wenn Tagesdaten existieren)
   let xLabels = [];
   const mainMap = {};
 
@@ -619,17 +642,12 @@ function renderChart(data1){
       }) || null;
     });
   } else if(main.year && main.month && main.day){
-    // Tagesansicht kann im Demo fehlen -> dann wird später auf Monatsdaten gefallen, aber dann passt die Ansicht nicht.
-    // Deshalb: Tagesansicht nur rendern, wenn ReportValues stündlich sind (mehr als 24 bzw. ValuesType 0 etc.).
-    // Wir versuchen es einfach: filter auf selben Tag und sortieren.
     const dayEntries = cons
       .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
       .filter(x => sameBerlinDay(x.bp, main.year, main.month, main.day))
       .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
 
     if(dayEntries.length === 0){
-      // Keine stündlichen Werte -> wir rendern stattdessen den Monat und heben NICHT extra hervor,
-      // aber wenigstens gibt's Daten.
       pickers[0].day = null;
       buildRollPicker();
       updateChartTitle();
@@ -642,7 +660,6 @@ function renderChart(data1){
       mainMap[i] = dayEntries[i].e;
     }
   } else {
-    // Fallback chronologisch
     const times = cons.map(c=>c.Timestamp).sort((a,b)=>a-b);
     xLabels = times;
     const idxCons = new Map(cons.map(v => [v.Timestamp, v]));
@@ -653,7 +670,6 @@ function renderChart(data1){
     return (d && typeof d === 'object' && 'idx' in d) ? d.idx : d;
   }
 
-  // yMax = max(HT+NT)
   let yMax = 0;
   for(const lbl of xLabels){
     const key = keyForDomain(lbl);
@@ -695,12 +711,21 @@ function renderChart(data1){
 
   const barW = x.bandwidth();
 
+  // (4) Tooltip mit Prozentanteilen
   function tooltipHTML(timeLabel, ht, nt){
-    const total = ht+nt;
+    const total = ht + nt;
+    const htPct = pctText(ht, total);
+    const ntPct = pctText(nt, total);
+
+    const htDisp = (Number.isFinite(ht) ? ht : 0);
+    const ntDisp = (Number.isFinite(nt) ? nt : 0);
+    const totalDisp = (Number.isFinite(total) ? total : 0);
+
+    // Beispiel-Format aus Anforderung (mit DE-Datum, Prozenten, Summe)
     return `<b>HT/NT</b><br>${timeLabel}<br>`+
-           `NT: ${nt.toFixed(3)} kWh<br>`+
-           `HT: ${ht.toFixed(3)} kWh<br>`+
-           `<b>Summe: ${total.toFixed(3)} kWh</b>`;
+           `HT: ${htDisp.toFixed(3)} kWh (${htPct})<br>`+
+           `NT: ${ntDisp.toFixed(3)} kWh (${ntPct})<br>`+
+           `<b>Summe: ${totalDisp.toFixed(3)} kWh</b>`;
   }
 
   // NT (unten)
@@ -808,19 +833,19 @@ function getTsForRow(lbl, picker, entry){
   if(entry && typeof entry.Timestamp === 'number') return entry.Timestamp;
 
   if(picker?.year){
-    const y = Number(picker.year);
-    const m = Number(picker.month||1);
-    const d = Number(picker.day||1);
+    const yv = Number(picker.year);
+    const mv = Number(picker.month||1);
+    const dv = Number(picker.day||1);
 
     if(picker.day){
       const hh = typeof lbl === 'string' ? Number(String(lbl).slice(0,2)) : Number(lbl||0);
-      return Math.floor(new Date(y, m-1, d, hh, 0, 0).getTime()/1000);
+      return Math.floor(new Date(yv, mv-1, dv, hh, 0, 0).getTime()/1000);
     }
     if(picker.month && !picker.day){
-      return Math.floor(new Date(y, m-1, Number(lbl||1), 0, 0, 0).getTime()/1000);
+      return Math.floor(new Date(yv, mv-1, Number(lbl||1), 0, 0, 0).getTime()/1000);
     }
     if(!picker.month){
-      return Math.floor(new Date(y, Number(lbl||1)-1, 1, 0, 0, 0).getTime()/1000);
+      return Math.floor(new Date(yv, Number(lbl||1)-1, 1, 0, 0, 0).getTime()/1000);
     }
   }
   return 0;
@@ -937,11 +962,20 @@ async function loadDevices(){
       return `<option value="${d.DeviceId}" data-division="${division}">${d.DeviceId}</option>`;
     }).join('');
 
-    if(isDemoMode() && rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
-      selectedDevice = rememberedDemoId;
+    if(isDemoMode()){
+      // (3) Demo: immer Stromzähler bevorzugen
+      const hasStromzaehler = dev.some(d => d.DeviceId === 'Stromzähler');
+      if(hasStromzaehler){
+        selectedDevice = 'Stromzähler';
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      } else if(rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
+        selectedDevice = rememberedDemoId;
+      } else {
+        selectedDevice = dev[0].DeviceId;
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      }
     } else {
       selectedDevice = dev[0].DeviceId;
-      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
     }
 
     devicesDropdown.value = selectedDevice;
@@ -991,7 +1025,6 @@ async function updateVisualization(){
         const monthData = await tryFetchJSON(monthUrl);
         if(monthData){
           pickers[0].day = null;
-          // UI neu aufbauen, dann wird Monatsansicht gerendert
           buildRollPicker();
           updateChartTitle();
           return monthData;
@@ -1072,7 +1105,13 @@ toggleTableBtn.addEventListener('click', () => {
    ========================== */
 (function init(){
   setInitialPickerToToday();
+
+  // (3) Demo: immer Stromzähler + 01.01.2026
+  if(isDemoMode()){
+    applyDemoDeviceDefault();
+  }
   applyDemoFirstLoadDateIfNeeded();
+
   buildRollPicker();
   loadDevices();
 })();

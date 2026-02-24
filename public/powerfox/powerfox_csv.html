@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CSV-Download für deinen poweropti</title>
   <link rel="stylesheet" href="css/style.css">
+
   <!-- Layout angeglichen an powerfox_energie.html -->
   <style>
     .spinner{ width:18px; height:18px; border-radius:50%; border:3px solid #e6eef6; border-top-color:var(--primary, #0070ba); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle; }
     @keyframes spin{ to { transform:rotate(360deg); } }
+
     .device-selection-row {
       display: flex;
       align-items: center;
@@ -22,22 +24,20 @@
       align-items: center;
       gap: 10px;
     }
-    .device-left label {
-      margin-right: 7px;
-    }
-    .device-left select {
-      min-width: 120px;
-    }
+    .device-left label { margin-right: 7px; }
+    .device-left select { min-width: 120px; }
+
     .device-right {
       margin-left: auto;
       display: flex;
       align-items: center;
       justify-content: flex-end;
       flex: 1 1 0%;
+      gap: 8px;
+      flex-wrap: wrap;
     }
-    .wechsel-btn {
-      white-space: nowrap;
-    }
+    .wechsel-btn { white-space: nowrap; }
+
     .picker-set {
       display:flex;
       gap:8px;
@@ -50,22 +50,41 @@
     }
     .picker-group { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
     .picker-label { font-size:13px; color:var(--muted); font-weight:600; }
+
     .data-grid { width:100%; border-collapse:collapse; }
     .data-grid th, .data-grid td { border:1px solid #e6eef6; padding:8px 10px; text-align:left; }
     .data-grid thead th { background:#f8fafc; font-weight:700; color:var(--text); }
+
     #date-picker-container.card { padding:12px; }
-    .csvdownload-bar {margin-top: 12px; display:flex; gap:12px; align-items:center;}
+
+    .csvdownload-bar {margin-top: 12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
     .info-row {margin-top: 10px; color:var(--muted);}
     .abort-bar {margin-top: 8px;}
+
+    .header-actions { display:flex; align-items:center; gap:8px; }
   </style>
 </head>
+
 <body>
   <div class="app">
 
-    <!-- Header: Überschrift + Abmelden-Button wie energie.html -->
+    <!-- Header: Überschrift + ezzey + Abmelden -->
     <header class="site-header" role="banner" aria-label="Seitenkopf">
       <h1>CSV-Download</h1>
-      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+
+      <!-- (1) ezzey.de links neben Abmelden -->
+      <div class="header-actions">
+        <button
+          id="ezzeyBtn"
+          class="btn"
+          type="button"
+          onclick="window.open('https://cw-ezzey.pages.dev/','_blank')"
+        >
+          ezzey.de
+        </button>
+
+        <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+      </div>
     </header>
 
     <main class="container" role="main">
@@ -85,14 +104,20 @@
           <label for="devices">Gerät auswählen:</label>
           <select id="devices"></select>
         </div>
+
         <div class="device-right">
-          <button id="toIndex" class="wechsel-btn btn" type="button">
-            Startseite
+          <!-- (2) Startseite entfernt -->
+          <!-- (3) neue Navigation -->
+          <button id="toLeistung" class="wechsel-btn btn" type="button">
+            zu Leistungswerten wechseln
+          </button>
+          <button id="toEnergie" class="wechsel-btn btn" type="button">
+            zu Energiedaten wechseln
           </button>
         </div>
       </div>
 
-      <!-- Picker-Kachel analog zu energie.html, aber für CSV (zwei Datepicker, darunter Granularitäts-Auswahl) -->
+      <!-- Picker-Kachel -->
       <div id="date-picker-container" class="card" aria-label="Datumsauswahl" style="margin-top:12px;">
         <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-end;">
           <div class="picker-group">
@@ -105,23 +130,30 @@
           </div>
           <div class="picker-group">
             <span class="picker-label">Werte-Art</span>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button id="granMonth" class="btn gran-btn" type="button">Monatswerte</button>
               <button id="granDay" class="btn gran-btn" type="button">Tageswerte</button>
             </div>
           </div>
         </div>
         <div id="granInfo" class="info-row"></div>
+
+        <!-- (5) Demo: Hinweis + direkte Demo-Downloads -->
+        <div id="demoHint" class="info-row" style="display:none;"></div>
+        <div id="demoQuickDownloads" class="csvdownload-bar" style="display:none;">
+          <button id="demoDownloadPowerCsv" class="btn" type="button">Demo: Leistungswerte herunterladen</button>
+        </div>
       </div>
 
       <!-- CSV Downloadleiste -->
       <div class="csvdownload-bar">
-        <button id="generateBtn" class="btn">CSV generieren & herunterladen</button>
+        <button id="generateBtn" class="btn">CSV generieren &amp; herunterladen</button>
         <div id="loadingIndicator" style="visibility:hidden;">
           <span class="spinner" id="spinnerEl"></span>
         </div>
         <div id="progressText" class="progress"></div>
       </div>
+
       <div class="abort-bar">
         <button id="abortBtn" class="btn secondary" type="button" style="margin-left:2px;">Abbrechen</button>
       </div>
@@ -142,10 +174,28 @@
           <div id="previewTable" style="max-height:320px; overflow:auto;"></div>
         </div>
       </div>
+
     </main>
   </div>
+
 <script>
-function pad(n){ return n<10?'0'+n:n;}
+/* ==========================
+   Demo Mode (wie powerfox_energie.html)
+   ========================== */
+const DEMO = {
+  devicesPath: 'demo/devices.json',
+  baseDevicePath: 'demo', // demo/<DeviceId>/
+  storageDemoMode: 'demoMode',
+  storageDemoDeviceId: 'demoDeviceId'
+};
+function isDemoMode(){ return localStorage.getItem(DEMO.storageDemoMode) === '1'; }
+function endDemoMode(){
+  localStorage.removeItem(DEMO.storageDemoMode);
+  localStorage.removeItem(DEMO.storageDemoDeviceId);
+}
+
+function pad(n){ return n<10 ? '0'+n : String(n); }
+
 function formatUTC(ts){
   const d = new Date(ts*1000);
   return {
@@ -154,39 +204,128 @@ function formatUTC(ts){
   };
 }
 function fmt3(v){ return Number(v ?? 0).toFixed(3); }
+
 function getCredentials(){ return localStorage.getItem('credentials'); }
 function AUTH_HEADER(){ return {Authorization:`Basic ${getCredentials()}`}; }
+
+async function fetchJSON(url, opts = {}){
+  if(isDemoMode()){
+    const res = await fetch(url, Object.assign({ cache: 'no-store' }, opts));
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    return res.json();
+  }
+
+  const creds = getCredentials();
+  if(!creds){
+    alert('Nicht angemeldet.');
+    window.location.href='index.html';
+    throw new Error('no creds');
+  }
+
+  const headers = Object.assign({}, opts.headers || {}, AUTH_HEADER());
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+  if(res.status===401||res.status===403){
+    localStorage.removeItem('credentials');
+    window.location.href='index.html';
+    throw new Error('Auth');
+  }
+  if(!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+
 function fetchWithAuth(url, signal){
+  if(isDemoMode()){
+    // In CSV-Generator nutzen wir im Demo-Modus keine API-Calls, daher hier nur Schutz:
+    return Promise.reject(new Error("Demo mode: fetchWithAuth not supported for API URLs."));
+  }
+
   return fetch(url,{headers:AUTH_HEADER(), signal}).then(async res=>{
-    if(res.status===401||res.status===403){localStorage.removeItem('credentials');window.location.href='index.html';throw new Error('Auth');}
-    if(!res.ok)throw new Error(res.statusText);
+    if(res.status===401||res.status===403){
+      localStorage.removeItem('credentials');
+      window.location.href='index.html';
+      throw new Error('Auth');
+    }
+    if(!res.ok) throw new Error(res.statusText);
     return res.json();
   });
 }
-function loadDevices(){
+
+/* ==========================
+   Devices (Demo + Live)
+   ========================== */
+async function loadDevices(){
   const sel=document.getElementById('devices');
   sel.innerHTML='<option>Lade Geräte...</option>';
-  const creds=getCredentials();
-  if(!creds){alert('Nicht angemeldet.');window.location.href='index.html';return;}
-  fetch('https://backend.powerfox.energy/api/2.0/my/all/devices',{headers:AUTH_HEADER()}).then(async res=>{
-    if(res.status===401||res.status===403){localStorage.removeItem('credentials');window.location.href='index.html';return;}
-    if(!res.ok)throw new Error(res.statusText);
-    const dev=await res.json();
-    if(!Array.isArray(dev)||dev.length===0){sel.innerHTML='<option value="">Keine Geräte</option>';return;}
-    sel.innerHTML=dev.map(d=>`<option value="${d.DeviceId}" data-devtype="${d.DeviceType||''}">${d.DeviceId}${d.DeviceType?' - '+d.DeviceType:''}</option>`).join('');
-  }).catch(e=>{
-    sel.innerHTML='<option value="">Fehler beim Laden</option>';alert('Geräte-Fehler: '+e.message);
-  });
+
+  try{
+    let dev = null;
+
+    if(isDemoMode()){
+      dev = await fetchJSON(DEMO.devicesPath);
+    } else {
+      dev = await fetchJSON('https://backend.powerfox.energy/api/2.0/my/all/devices');
+    }
+
+    if(!Array.isArray(dev) || dev.length===0){
+      sel.innerHTML='<option value="">Keine Geräte</option>';
+      return;
+    }
+
+    const rememberedDemoId = localStorage.getItem(DEMO.storageDemoDeviceId);
+
+    sel.innerHTML = dev.map(d=>{
+      const deviceType = d.DeviceType || '';
+      const division = (d && typeof d.Division !== 'undefined') ? d.Division : '';
+      // keep devtype for existing logic
+      return `<option value="${d.DeviceId}" data-devtype="${deviceType}" data-division="${division}">${d.DeviceId}${deviceType ? ' - ' + deviceType : ''}</option>`;
+    }).join('');
+
+    let selected = dev[0].DeviceId;
+    if(isDemoMode()){
+      if(rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
+        selected = rememberedDemoId;
+      } else {
+        localStorage.setItem(DEMO.storageDemoDeviceId, selected);
+      }
+    }
+
+    sel.value = selected;
+
+    sel.onchange = ()=>{
+      if(isDemoMode()){
+        localStorage.setItem(DEMO.storageDemoDeviceId, sel.value);
+      }
+      updateGranInfo();
+      updateDemoUI();
+    };
+
+    updateDemoUI();
+  }catch(e){
+    sel.innerHTML='<option value="">Fehler beim Laden</option>';
+    alert('Geräte-Fehler: '+e.message);
+  }
 }
-document.getElementById('toIndex').onclick = () => location.href='index.html';
+
+/* ==========================
+   Navigation / Logout
+   ========================== */
+document.getElementById('toLeistung').onclick = () => location.href='powerfox_leistung.html';
+document.getElementById('toEnergie').onclick  = () => location.href='powerfox_energie.html';
+
 document.getElementById('logoutBtn').onclick = () => {
-  localStorage.removeItem('credentials'); localStorage.removeItem('devices'); location.href='index.html';
+  localStorage.removeItem('credentials');
+  localStorage.removeItem('devices');
+  endDemoMode();
+  location.href='index.html';
 };
 
-// Granularitätsauswahl wie picker-Tabs
+/* ==========================
+   Granularität
+   ========================== */
 let selectedGran = 'day';
 document.getElementById('granMonth').onclick = function(){ chooseGran('month'); };
 document.getElementById('granDay').onclick   = function(){ chooseGran('day'); };
+
 function chooseGran(gran){
   selectedGran=gran;
   ['granMonth','granDay'].forEach(id => document.getElementById(id).classList.remove('active'));
@@ -194,6 +333,7 @@ function chooseGran(gran){
   if(gran==='day')   document.getElementById('granDay').classList.add('active');
   updateGranInfo();
 }
+
 function updateGranInfo(){
   const f=document.getElementById('fromDate').value;
   const t=document.getElementById('toDate').value;
@@ -201,19 +341,78 @@ function updateGranInfo(){
   const fd=new Date(f+'T00:00:00Z');
   const td=new Date(t+'T00:00:00Z');
   if(fd>td){document.getElementById('granInfo').textContent='Startdatum muss vor Enddatum liegen.';return;}
+
   let anz=0;
-  if(selectedGran==='month'){anz=td.getUTCFullYear()-fd.getUTCFullYear()+1;}
-  else if(selectedGran==='day'){
-    let startYear=fd.getUTCFullYear(),startMonth=fd.getUTCMonth()+1;
-    let endYear=td.getUTCFullYear(),endMonth=td.getUTCMonth()+1;
-    anz=(endYear-startYear)*12+endMonth-startMonth+1;
+  if(selectedGran==='month'){
+    anz = td.getUTCFullYear() - fd.getUTCFullYear() + 1;
+  } else if(selectedGran==='day'){
+    const startYear=fd.getUTCFullYear(), startMonth=fd.getUTCMonth()+1;
+    const endYear=td.getUTCFullYear(), endMonth=td.getUTCMonth()+1;
+    anz=(endYear-startYear)*12 + endMonth-startMonth + 1;
   }
   document.getElementById('granInfo').textContent = `${anz} Abfragen`;
 }
+
 ['fromDate','toDate','devices'].forEach(id=>document.getElementById(id).addEventListener('change',updateGranInfo));
 chooseGran('day');
 
-// Abbrechen-Logik
+/* ==========================
+   Demo UI + Demo Downloads
+   ========================== */
+function demoPowerCsvPathForDevice(deviceId){
+  // requirement: file exists in demo/Stromzähler/Leistungswerte_Stromzähler.csv
+  if(deviceId !== 'Stromzähler') return null;
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/Leistungswerte_${deviceId}.csv`;
+}
+
+function updateDemoUI(){
+  const demoHint = document.getElementById('demoHint');
+  const demoQuick = document.getElementById('demoQuickDownloads');
+  const demoDlBtn = document.getElementById('demoDownloadPowerCsv');
+
+  if(!isDemoMode()){
+    demoHint.style.display='none';
+    demoQuick.style.display='none';
+    return;
+  }
+
+  const devId = document.getElementById('devices').value;
+
+  demoHint.style.display='block';
+  demoQuick.style.display='flex';
+
+  demoHint.textContent = 'Demo-Modus aktiv: Downloads werden aus dem Ordner public/powerfox/demo/<Gerät>/ bereitgestellt.';
+
+  const path = demoPowerCsvPathForDevice(devId);
+  if(path){
+    demoDlBtn.disabled = false;
+    demoDlBtn.textContent = 'Demo: Leistungswerte herunterladen';
+    demoDlBtn.onclick = async ()=>{
+      try{
+        const res = await fetch(path, { cache:'no-store' });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Leistungswerte_${devId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      }catch(e){
+        alert('Demo-Download-Fehler: '+e.message);
+      }
+    };
+  } else {
+    demoDlBtn.disabled = true;
+    demoDlBtn.textContent = "Demo: Leistungswerte nur für 'Stromzähler' verfügbar";
+    demoDlBtn.onclick = null;
+  }
+}
+
+/* ==========================
+   Abort logic
+   ========================== */
 let currentAbortController = null;
 document.getElementById('abortBtn').onclick = function(){
   if(currentAbortController){
@@ -227,44 +426,106 @@ document.getElementById('abortBtn').onclick = function(){
   currentAbortController = null;
 };
 
-// CSV Download / Haupt-Logik
+/* ==========================
+   Demo generator strategy
+   ========================== */
+/**
+ * Demo CSV: Wir können im Demo-Modus keine API-Reports abfragen.
+ * Daher bieten wir:
+ * - direkte Demo-Leistungswerte (CSV) per Button (siehe oben)
+ * - und für "CSV generieren & herunterladen" versuchen wir im Demo-Modus die Report-JSONs (wie Energie/HTNT Demo)
+ *   zu laden, um die gleiche CSV-Struktur (Datum/Uhrzeit/Verbrauch/Einspeisung oder Gas) zu erzeugen.
+ *
+ * Falls für ein Gerät/Zeitraum keine Demo-JSONs vorhanden sind, geben wir eine klare Meldung.
+ */
+function demoBase(deviceId){
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}`;
+}
+function demoPathMonth(deviceId, y, m){
+  return `${demoBase(deviceId)}/${y}-${pad(m)}.json`;
+}
+function demoPathYear(deviceId, y){
+  return `${demoBase(deviceId)}/${y}.json`;
+}
+
+async function tryFetchDemoJSON(url){
+  try{
+    const res = await fetch(url, { cache:'no-store' });
+    if(!res.ok) return null;
+    return res.json();
+  }catch(_e){
+    return null;
+  }
+}
+
+/* ==========================
+   CSV Download / Haupt-Logik
+   ========================== */
 document.getElementById('generateBtn').onclick = async function(){
   document.getElementById('resultCard').style.display='none';
   document.getElementById('preview').style.display='none';
   document.getElementById('previewTable').innerHTML='';
+
   const sel=document.getElementById('devices');
   const devId=sel.value;
-  const devType=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].dataset.devtype:'';
+  const devType=sel.options[sel.selectedIndex] ? (sel.options[sel.selectedIndex].dataset.devtype || '') : '';
   const from=document.getElementById('fromDate').value;
   const to=document.getElementById('toDate').value;
-  if(!devId||!from||!to){alert('Bitte alle Felder ausfüllen.');return;}
+
+  if(!devId||!from||!to){ alert('Bitte alle Felder ausfüllen.'); return; }
+
   const fd=new Date(from+'T00:00:00Z'), td=new Date(to+'T00:00:00Z');
-  if(fd>td){alert('Startdatum muss vor Enddatum liegen.');return;}
+  if(fd>td){ alert('Startdatum muss vor Enddatum liegen.'); return; }
+
   document.getElementById('loadingIndicator').style.visibility='visible';
+
+  // Build query specs
   let specs=[];
+
   if(selectedGran==='month'){
-    for(let y=fd.getUTCFullYear();y<=td.getUTCFullYear();y++)
-      specs.push({url:`https://backend.powerfox.energy/api/2.0/my/${devId}/report?year=${y}`,label:`${y}`});
+    for(let y=fd.getUTCFullYear(); y<=td.getUTCFullYear(); y++){
+      specs.push({ kind:'year', y, url:`https://backend.powerfox.energy/api/2.0/my/${devId}/report?year=${y}`, label:`${y}`});
+    }
   } else {
-    let startYear=fd.getUTCFullYear(),startMonth=fd.getUTCMonth()+1;
-    let endYear=td.getUTCFullYear(),endMonth=td.getUTCMonth()+1;
-    let y=startYear,m=startMonth;
-    while(y<endYear||(y===endYear&&m<=endMonth)){
-      specs.push({url:`https://backend.powerfox.energy/api/2.0/my/${devId}/report?year=${y}&month=${pad(m)}`,label:`${y}-${pad(m)}`});
+    let startYear=fd.getUTCFullYear(), startMonth=fd.getUTCMonth()+1;
+    let endYear=td.getUTCFullYear(), endMonth=td.getUTCMonth()+1;
+    let y=startYear, m=startMonth;
+    while(y<endYear || (y===endYear && m<=endMonth)){
+      specs.push({ kind:'month', y, m, url:`https://backend.powerfox.energy/api/2.0/my/${devId}/report?year=${y}&month=${pad(m)}`, label:`${y}-${pad(m)}`});
       m++; if(m>12){m=1;y++;}
     }
   }
+
   document.getElementById('progressText').textContent=`0 / ${specs.length} Abfragen`;
+
   let rowEntries=[], csvHeader='';
-  let isGas=(devType.toLowerCase().includes('flow')||devType.toLowerCase().includes('gas'));
+  let headerDone = false;
+
   let abortController = new AbortController();
   currentAbortController = abortController;
-  let headerDone = false; // Wird verwendet, um die Header einmalig zu erfassen
 
   try{
     for(let i=0;i<specs.length;i++){
       document.getElementById('progressText').textContent=`${i+1} / ${specs.length} Abfragen...`;
-      let d=await fetchWithAuth(specs[i].url, abortController.signal);
+
+      let d = null;
+
+      if(isDemoMode()){
+        // Use demo JSON
+        if(specs[i].kind === 'year'){
+          d = await tryFetchDemoJSON(demoPathYear(devId, specs[i].y));
+        } else {
+          d = await tryFetchDemoJSON(demoPathMonth(devId, specs[i].y, specs[i].m));
+        }
+
+        if(!d){
+          // skip silently but continue; we will error out if no data overall
+          continue;
+        }
+      } else {
+        d = await fetchWithAuth(specs[i].url, abortController.signal);
+      }
+
       const gasLike = (d && d.Gas);
       if (gasLike && Array.isArray(gasLike.ReportValues)){
         if(!headerDone){
@@ -289,11 +550,13 @@ document.getElementById('generateBtn').onclick = async function(){
           csvHeader="Datum;Uhrzeit;Verbrauch [kWh];Einspeisung [kWh]";
           headerDone=true;
         }
+
         let consumptionArr = d.Consumption.ReportValues.filter(val => val.ValuesType === 1);
         let feedArr = [];
         if(d.FeedIn && Array.isArray(d.FeedIn.ReportValues)){
           feedArr = d.FeedIn.ReportValues.filter(val => val.ValuesType === 2);
         }
+
         consumptionArr.forEach(cons=>{
           const ts=formatUTC(cons.Timestamp);
           const feed = feedArr.find(f=>f.Timestamp===cons.Timestamp);
@@ -309,39 +572,68 @@ document.getElementById('generateBtn').onclick = async function(){
         });
       }
     }
+
     document.getElementById('loadingIndicator').style.visibility='hidden';
+
     if(rowEntries.length===0){
-      document.getElementById('progressText').textContent='Keine Daten für den Zeitraum!';
+      document.getElementById('progressText').textContent =
+        isDemoMode()
+          ? 'Keine Demo-Daten für den Zeitraum/ das Gerät gefunden.'
+          : 'Keine Daten für den Zeitraum!';
       currentAbortController = null;
       return;
     }
+
     rowEntries.sort((a,b)=>b.ts - a.ts);
+
     let csvRows = rowEntries.map(e=>e.row);
     let lines=[csvHeader];
     csvRows.forEach(r=>lines.push(r.join(';')));
     const csvText=lines.join('\n');
-    let typ=selectedGran==='month'?'monatswerte':'tageswerte';
-    let fname=`${devId}_${from.replace(/-/g,'')}_${to.replace(/-/g,'')}_${typ}.csv`;
+
+    let typ = selectedGran==='month' ? 'monatswerte' : 'tageswerte';
+    let fname = `${devId}_${from.replace(/-/g,'')}_${to.replace(/-/g,'')}_${typ}.csv`;
+
     const blob=new Blob([csvText],{type:'text/csv;charset=utf-8;'});
     const url=URL.createObjectURL(blob);
+
     document.getElementById('downloadLinkBtn').onclick=()=>{
       let a=document.createElement('a');
-      a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();
+      a.href=url;
+      a.download=fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     };
+
     document.getElementById('showPreviewBtn').onclick=()=>{
       let prevRows=csvRows.slice(0,200);
       let header=csvHeader.split(';');
-      let html='<table class="data-grid"><thead><tr>'+header.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>';
-      prevRows.forEach(r=>{ html+='<tr>'+header.map((h,j)=>`<td>${r[j]||''}</td>`).join('')+'</tr>';});
+
+      let html='<table class="data-grid"><thead><tr>'+
+        header.map(h=>`<th>${h}</th>`).join('')+
+        '</tr></thead><tbody>';
+
+      prevRows.forEach(r=>{
+        html+='<tr>'+header.map((_h,j)=>`<td>${r[j]||''}</td>`).join('')+'</tr>';
+      });
+
       html+='</tbody></table>';
+
       document.getElementById('previewTable').innerHTML=html;
       document.getElementById('preview').style.display='block';
+
       document.getElementById('showPreviewBtn').textContent='Vorschau verbergen';
-      document.getElementById('showPreviewBtn').onclick=()=>{document.getElementById('preview').style.display='none';document.getElementById('showPreviewBtn').textContent='Vorschau anzeigen';};
+      document.getElementById('showPreviewBtn').onclick=()=>{
+        document.getElementById('preview').style.display='none';
+        document.getElementById('showPreviewBtn').textContent='Vorschau anzeigen';
+      };
     };
+
     document.getElementById('resultCard').style.display='block';
     document.getElementById('progressText').textContent=csvRows.length+' Zeilen generiert';
     currentAbortController = null;
+
   }catch(err){
     document.getElementById('loadingIndicator').style.visibility='hidden';
     if(err.name==="AbortError"){
@@ -358,8 +650,10 @@ document.getElementById('generateBtn').onclick = async function(){
   const now=new Date();
   const today=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()));
   const last30=new Date(today.getTime()-1000*60*60*24*30);
+
   document.getElementById('fromDate').value=last30.toISOString().slice(0,10);
   document.getElementById('toDate').value=today.toISOString().slice(0,10);
+
   loadDevices();
   updateGranInfo();
 })();

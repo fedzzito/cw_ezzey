@@ -33,6 +33,9 @@
 
   --focus-ring: 0 0 0 4px rgba(15,81,50,0.12);
   --shadow: 0 10px 30px rgba(15,23,32,0.06);
+
+  /* NEU: zusätzlicher Top-Abstand für den Header (damit Donate-Float nichts überdeckt) */
+  --header-top-offset: 60px;
 }
 
 /* ---------------------
@@ -101,6 +104,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
   border-radius:var(--radius);
   box-shadow:var(--shadow);
   border:1px solid var(--card-border);
+
+  /* vorher: margin-bottom: var(--gap-m); */
+  margin-top: var(--header-top-offset); /* NEU: Header rutscht auf allen Powerfox Seiten nach unten */
   margin-bottom: var(--gap-m);
 }
 
@@ -251,6 +257,10 @@ svg{ width:100%; height:auto; display:block; }
 @media (max-width:720px){
   .site-header{ flex-direction:column; align-items:center; }
   .site-header h1{ text-align:center; font-size:1rem; }
+
+  /* auf mobilen Geräten etwas weniger Top-Offset */
+  :root{ --header-top-offset: 48px; }
+
   .app{ margin:16px; padding:16px; }
   .card{ min-height:100px; padding:12px; }
   .cards{ gap:12px; }

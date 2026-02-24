@@ -49,14 +49,34 @@
     .device-left select { min-width:120px; }
     .device-right { margin-left:auto; display:flex; align-items:center; justify-content:flex-end; flex:1 1 0%; gap:8px; }
     .wechsel-btn { white-space:nowrap; }
+
+    /* (1) Extra Platz oben, damit fixed donate button (top-right) die erste Karte nicht überdeckt */
+    .container { padding-top: 74px; }
+
+    /* Header Buttons: rechts vom Titel */
+    .header-actions{ display:flex; align-items:center; gap:8px; }
   </style>
 </head>
 <body>
   <div class="app">
     <header class="site-header" role="banner" aria-label="Seitenkopf">
       <h1>Energiedaten-Dashboard</h1>
-      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+
+      <!-- (3) ezzey.de links neben Abmelden -->
+      <div class="header-actions">
+        <button
+          id="ezzeyBtn"
+          class="btn"
+          type="button"
+          onclick="window.open('https://cw-ezzey.pages.dev/','_blank')"
+        >
+          ezzey.de
+        </button>
+
+        <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+      </div>
     </header>
+
     <main class="container" role="main">
      <div class="paypal-donate" role="region" aria-label="Spenden und Feedback">
       <form action="https://www.paypal.com/donate" method="post" target="_blank">
@@ -76,16 +96,6 @@
             zu CSV-Download wechseln
           </button>
 
-          <!-- NEU: ezzey.de Button -->
-          <button class="wechsel-btn btn" type="button" onclick="window.open('https://cw-ezzey.pages.dev/','_blank')">
-            ezzey.de
-          </button>
-
-          <!-- NEU: HT/NT Button (nur sichtbar wenn HT/NT erkannt) -->
-          <button id="htnt-btn" class="wechsel-btn btn" type="button" style="display:none" onclick="window.open('https://cw-ezzey.pages.dev/powerfox//powerfox_htnt','_blank')">
-            HT/NT
-          </button>
-
           <button class="wechsel-btn btn" onclick="location.href='powerfox_leistung.html'">
             zu Leistungswerten wechseln
           </button>
@@ -99,11 +109,24 @@
           <div id="loading-indicator" class="spinner" style="visibility:hidden;"></div>
           <h2 id="chart-title" style="margin:0">Energiedaten</h2>
         </div>
+
+        <!-- rechts im Header: Gas-Switch ODER HT/NT -->
         <div style="display:flex;align-items:center;gap:16px;">
           <div id="gas-switch-container" style="display:none;align-items:center;gap:10px;">
             <span class="kv">Gas-Einheit:</span>
             <button id="gas-switch-btn" class="btn" type="button">m³/kWh</button>
           </div>
+
+          <!-- (2) HT/NT Button hierher verlegt -->
+          <button
+            id="htnt-btn"
+            class="btn"
+            type="button"
+            style="display:none"
+            onclick="window.open('https://cw-ezzey.pages.dev/powerfox//powerfox_htnt','_blank')"
+          >
+            HT/NT
+          </button>
         </div>
       </div>
 
@@ -533,6 +556,14 @@ function setInitialPickerToToday(){
   pickers[0].day = p.day;
 }
 
+/* (5) Demo: fix auf Stromzähler + 01.01.2026 */
+function setInitialDemoDefaults(){
+  pickers[0].year = 2026;
+  pickers[0].month = 1;
+  pickers[0].day = 1;
+  selectedDevice = 'Stromzähler';
+}
+
 function getCredentials(){ return localStorage.getItem('credentials'); }
 function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
 
@@ -695,14 +726,25 @@ async function loadDevices(){
       return `<option value="${d.DeviceId}" data-division="${division}">${d.DeviceId}</option>`;
     }).join('');
 
-    if(isDemoMode() && rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
-      selectedDevice = rememberedDemoId;
+    if(isDemoMode()){
+      // (5) Demo: immer Stromzähler + 01.01.2026 (und Dropdown passend setzen falls vorhanden)
+      const hasStromzaehler = dev.some(d => d.DeviceId === 'Stromzähler');
+      if(hasStromzaehler){
+        selectedDevice = 'Stromzähler';
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+        devicesDropdown.value = selectedDevice;
+      } else if(rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
+        selectedDevice = rememberedDemoId;
+        devicesDropdown.value = selectedDevice;
+      } else {
+        selectedDevice = dev[0].DeviceId;
+        devicesDropdown.value = selectedDevice;
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      }
     } else {
       selectedDevice = dev[0].DeviceId;
-      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      devicesDropdown.value = selectedDevice;
     }
-
-    devicesDropdown.value = selectedDevice;
 
     devicesDropdown.onchange = ()=>{
       selectedDevice = devicesDropdown.value;
@@ -1506,7 +1548,11 @@ toggleTableBtn.addEventListener('click', () => {
 });
 
 (function init(){
-  setInitialPickerToToday();
+  if(isDemoMode()){
+    setInitialDemoDefaults();   // (5) Stromzähler + 01.01.2026
+  } else {
+    setInitialPickerToToday();
+  }
   buildRollPicker();
   loadDevices();
 })();

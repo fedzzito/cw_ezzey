@@ -4,63 +4,159 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Energie-Dashboard für deinen poweropti</title>
+
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <link rel="stylesheet" href="css/style.css">
-  <style>
-    .spinner{ width:18px; height:18px; border-radius:50%; border:3px solid #e6eef6; border-top-color:var(--primary, #0070ba); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle;}
-    @keyframes spin{ to { transform:rotate(360deg); } }
-    #chart { height: 460px; display:block; }
-    .rollpicker-inline { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
-    .picker-set { display:flex; gap:8px; align-items:center; border:1px solid #e6eef6; border-radius:10px; padding:8px 12px; background:#f8fafc; min-width:300px; }
-    .picker-group { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
-    .picker-label { font-size:13px; color:var(--muted); font-weight:600; }
-    .picker-roll-container { display:flex; align-items:center; gap:4px; }
-    .picker-roll { max-height:120px; overflow-y:hidden; display:flex; flex-direction:column; align-items:center; border-radius:8px; border:1px solid rgba(0,0,0,0.08); background:transparent; padding:4px 6px; }
-    .picker-item{ display:inline-flex; align-items:center; justify-content:center; padding:5px 10px; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; font-weight:600; white-space:nowrap; border:0; }
-    .picker-item.placeholder{ opacity:0.25; cursor:default; }
-    .picker-item.selected{ background:var(--primary); color:#fff; box-shadow: 0 6px 20px rgba(2,112,170,0.15); transform:translateY(-1px); border:none; }
-    .picker-arrow { width:24px; height:24px; border:none; background:transparent; font-size:16px; color:#888; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-    .picker-add { margin-left:6px; }
-    .picker-remove { background:transparent; border:1px solid rgba(0,0,0,0.08); color:var(--danger); border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
-    .data-grid { width:100%; border-collapse:collapse; }
-    .data-grid th, .data-grid td { border:1px solid #e6eef6; padding:8px 10px; text-align:left; }
-    .data-grid thead th { background:#f8fafc; font-weight:700; color:var(--text); }
-    #rollpicker-container.card { padding:12px; }
 
-    /* FIX: Tooltip Text sichtbar machen (falls globale Styles z.B. color:white setzen) */
-    .tooltip {
+  <!--
+    Hinweis:
+    - Alle Farben/Looks werden über css/style.css gesteuert (CSS-Variablen + Klassen).
+    - In dieser Datei sind keine Hardcoded-Farben (#..., rgba(...)) mehr für UI/Charts.
+    - Inline-Styles wurden weitgehend durch Klassen ersetzt.
+  -->
+  <style>
+    /* Layout-Helper nur für diese Seite (ohne Farben) */
+    @keyframes spin{ to { transform:rotate(360deg); } }
+
+    #chart{ height:460px; display:block; }
+
+    .pf-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .pf-row--wrap{ flex-wrap:wrap; align-items:flex-start; }
+    .pf-row--tight{ gap:12px; }
+
+    .pf-mt-s{ margin-top:12px; }
+    .pf-mt-m{ margin-top:14px; }
+
+    .pf-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex:1 1 0%; }
+    .pf-actions--nowrap .btn{ white-space:nowrap; }
+
+    /* Spinner (Farbe kommt aus style.css: --spinner-top-color) */
+    .spinner{
+      width:18px;
+      height:18px;
+      border-radius:50%;
+      border:3px solid var(--ui-line, rgba(15,23,32,0.10));
+      border-top-color: var(--spinner-top-color, var(--primary));
+      animation:spin 1s linear infinite;
+      display:inline-block;
+      vertical-align:middle;
+    }
+
+    /* Rollpicker layout (Farben in style.css) */
+    .rollpicker-inline{ display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+    .picker-set{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      border:1px solid var(--ui-line, rgba(15,23,32,0.10));
+      border-radius:10px;
+      padding:8px 12px;
+      background: var(--ui-soft, rgba(15,23,32,0.03));
+      min-width:300px;
+    }
+    .picker-group{ display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+    .picker-label{ font-size:13px; color:var(--muted); font-weight:600; }
+    .picker-roll-container{ display:flex; align-items:center; gap:4px; }
+    .picker-roll{
+      max-height:120px;
+      overflow-y:hidden;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      border-radius:8px;
+      border:1px solid var(--ui-line, rgba(15,23,32,0.10));
+      background:transparent;
+      padding:4px 6px;
+    }
+    .picker-item{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:5px 10px;
+      border-radius:6px;
+      background:transparent;
+      color:var(--text);
+      cursor:pointer;
+      font-weight:600;
+      white-space:nowrap;
+      border:0;
+    }
+    .picker-item.placeholder{ opacity:0.25; cursor:default; }
+    /* selected state is controlled in css/style.css via --picker-selected-bg / --picker-selected-text */
+    .picker-arrow{
+      width:24px;
+      height:24px;
+      border:none;
+      background:transparent;
+      font-size:16px;
+      color:var(--muted);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .picker-add{ margin-left:6px; }
+    .picker-remove{
+      background:transparent;
+      border:1px solid var(--ui-line, rgba(15,23,32,0.10));
+      color:var(--danger);
+      border-radius:50%;
+      width:32px;
+      height:32px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+
+    /* Table layout (Farben via tokens) */
+    .data-grid{ width:100%; border-collapse:collapse; }
+    .data-grid th, .data-grid td{
+      border:1px solid var(--ui-line, rgba(15,23,32,0.10));
+      padding:8px 10px;
+      text-align:left;
+    }
+    .data-grid thead th{
+      background: var(--ui-soft, rgba(15,23,32,0.03));
+      font-weight:700;
+      color:var(--text);
+    }
+
+    /* Header area + top actions */
+    .site-header__actions{ display:flex; align-items:center; gap:8px; }
+
+    /* Device row layout */
+    .device-selection-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:1em; margin-bottom:0.75em; }
+    .device-left{ display:flex; align-items:center; gap:10px; }
+    .device-left label{ margin-right:7px; }
+    .device-left select{ min-width:120px; }
+    .device-right{ margin-left:auto; display:flex; align-items:center; justify-content:flex-end; flex:1 1 0%; gap:8px; }
+    .wechsel-btn{ white-space:nowrap; }
+
+    /* Tooltip: Farben aus style.css Tokens */
+    .tooltip{
       position:absolute;
       display:none;
       pointer-events:none;
-      background:#fff;
-      border:1px solid #ccc;
+      background: var(--tooltip-bg, rgba(0,0,0,0.82));
+      border: 1px solid var(--tooltip-border, transparent);
       padding:6px;
-      border-radius:4px;
+      border-radius:6px;
       font-size:13px;
-      box-shadow:0 2px 8px rgba(0,0,0,0.13);
+      box-shadow: var(--tooltip-shadow, 0 2px 8px rgba(15,23,32,0.13));
       z-index:9999;
-      color:#111;
+      color: var(--tooltip-text, #fff);
     }
-    .tooltip, .tooltip * { color:#111; }
-
-    .device-selection-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:0.75em; margin-top:1em; }
-    .device-left { display:flex; align-items:center; gap:10px; }
-    .device-left label { margin-right:7px; }
-    .device-left select { min-width:120px; }
-    .device-right { margin-left:auto; display:flex; align-items:center; justify-content:flex-end; flex:1 1 0%; gap:8px; }
-    .wechsel-btn { white-space:nowrap; }
-
-    /* Header Buttons: rechts vom Titel */
-    .header-actions{ display:flex; align-items:center; gap:8px; }
+    .tooltip, .tooltip *{ color: var(--tooltip-text, #fff); }
   </style>
 </head>
+
 <body>
   <div class="app">
     <header class="site-header" role="banner" aria-label="Seitenkopf">
       <h1>Energiedaten-Dashboard</h1>
 
-      <!-- (3) ezzey.de links neben Abmelden -->
-      <div class="header-actions">
+      <div class="site-header__actions" aria-label="Header Aktionen">
         <button
           id="ezzeyBtn"
           class="btn"
@@ -75,12 +171,12 @@
     </header>
 
     <main class="container" role="main">
-     <div class="paypal-donate" role="region" aria-label="Spenden und Feedback">
-      <form action="https://www.paypal.com/donate" method="post" target="_blank">
-       <input type="hidden" name="business" value="fedzzito@gmail.com">
-       <input type="hidden" name="currency_code" value="EUR">
-       <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
-       </form>
+      <div class="paypal-donate" role="region" aria-label="Spenden und Feedback">
+        <form action="https://www.paypal.com/donate" method="post" target="_blank">
+          <input type="hidden" name="business" value="fedzzito@gmail.com">
+          <input type="hidden" name="currency_code" value="EUR">
+          <button type="submit" class="donate-btn btn">Spenden &amp; Feedback-Kontakt</button>
+        </form>
       </div>
 
       <div class="device-selection-row" role="region" aria-label="Geräteauswahl">
@@ -88,33 +184,27 @@
           <label for="devices">Gerät auswählen:</label>
           <select id="devices"></select>
         </div>
-        <div class="device-right">
-          <button class="wechsel-btn btn" onclick="location.href='powerfox_csv.html'">
-            zu CSV-Download wechseln
-          </button>
 
-          <button class="wechsel-btn btn" onclick="location.href='powerfox_leistung.html'">
-            zu Leistungswerten wechseln
-          </button>
+        <div class="device-right">
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_csv.html'">zu CSV-Download wechseln</button>
+          <button class="wechsel-btn btn" onclick="location.href='powerfox_leistung.html'">zu Leistungswerten wechseln</button>
         </div>
       </div>
 
-      <div id="rollpicker-container" class="card" aria-label="Datumsauswahl" style="margin-top:12px;"></div>
+      <div id="rollpicker-container" class="card pf-mt-s" aria-label="Datumsauswahl"></div>
 
-      <div id="chart-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;">
-        <div id="title-container" style="display:flex;align-items:center;gap:10px;">
-          <div id="loading-indicator" class="spinner" style="visibility:hidden;"></div>
+      <div id="chart-header" class="pf-row pf-row--tight pf-mt-s" aria-label="Chart Header">
+        <div id="title-container" class="pf-row pf-row--tight" style="justify-content:flex-start;">
+          <div id="loading-indicator" class="spinner" style="visibility:hidden;" aria-label="Lädt..."></div>
           <h2 id="chart-title" style="margin:0">Energiedaten</h2>
         </div>
 
-        <!-- rechts im Header: Gas-Switch ODER HT/NT -->
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div id="gas-switch-container" style="display:none;align-items:center;gap:10px;">
+        <div class="pf-actions pf-actions--nowrap" aria-label="Chart Aktionen">
+          <div id="gas-switch-container" style="display:none;" class="pf-row pf-row--tight" aria-label="Gas Umschalter">
             <span class="kv">Gas-Einheit:</span>
             <button id="gas-switch-btn" class="btn" type="button">m³/kWh</button>
           </div>
 
-          <!-- (2) HT/NT Button hierher verlegt -->
           <button
             id="htnt-btn"
             class="btn"
@@ -127,33 +217,32 @@
         </div>
       </div>
 
-      <div id="chart-container" class="chart-wrapper" style="margin-top:12px;">
+      <div id="chart-container" class="chart-wrapper pf-mt-s">
         <svg id="chart"></svg>
       </div>
 
-      <div id="summary" style="margin-top:14px;"></div>
+      <div id="summary" class="pf-mt-m" aria-label="Zusammenfassung"></div>
 
-      <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+      <div class="pf-row pf-row--tight pf-mt-s" style="justify-content:flex-start;">
         <button id="toggle-table" class="btn">Datentabelle laden</button>
-        <!-- Entfernt: globaler CSV-Export Button (Tabelle-Karten-Buttons reichen aus) -->
       </div>
 
-      <div id="table-container" style="display:none; margin-top:12px;"></div>
-      <div id="tooltip" class="tooltip"></div>
+      <div id="table-container" style="display:none;" class="pf-mt-s" aria-label="Datentabelle"></div>
+      <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
     </main>
   </div>
 
 <script>
 /**
- * Anpassungen für Demo:
+ * Demo:
  * - demoMode = localStorage.demoMode === "1"
  * - Devices im Demo aus demo/devices.json
  * - Reports im Demo aus demo/<DeviceId>/YYYY-MM-DD.json (TAGES-Ansicht)
  *   Für Monat/Jahr wird automatisch auf vorhandene Tagesdateien aggregiert (best-effort).
  *
- * Voraussetzung:
- * - public/powerfox/demo/devices.json existiert
- * - pro Demo-Device: public/powerfox/demo/<DeviceId>/YYYY-MM-DD.json existiert (API-like report shape)
+ * Ziel dieser Datei:
+ * - Farben werden nicht im JS/HTML gesetzt.
+ * - Balkenfarben/Pickerfarben kommen über CSS (siehe css/style.css Tokens).
  */
 
 const apiUrl               = 'https://backend.powerfox.energy/api/2.0/my/';
@@ -181,7 +270,6 @@ const DEMO = {
 function isDemoMode(){
   return localStorage.getItem(DEMO.storageDemoMode) === '1';
 }
-
 function endDemoMode(){
   localStorage.removeItem(DEMO.storageDemoMode);
   localStorage.removeItem(DEMO.storageDemoDeviceId);
@@ -190,11 +278,11 @@ function endDemoMode(){
 let selectedDevice = null;
 let isGasDevice = false;
 let gasUnit = 'm3';
+
 const monthNames = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const pad = n => n < 10 ? '0' + n : n;
-const pickerColors = ["#0070ba", "#FF3B30"];
 
-let pickers = [{year:null, month:null, day:null, color:pickerColors[0], type:"main"}];
+let pickers = [{year:null, month:null, day:null, type:"main"}];
 let compareActive = false;
 let activePickerIndex = null;
 
@@ -206,7 +294,7 @@ let lastChartAgg = {
   hasCompare: false
 };
 
-// NEU: HT/NT Erkennung
+// HT/NT Erkennung
 let isHtNtDevice = false;
 
 if(logoutBtn){
@@ -215,9 +303,8 @@ if(logoutBtn){
     localStorage.removeItem('credentials');
     localStorage.removeItem('devices');
 
-    // Demo soll mit Abmelden ebenfalls beendet werden
+    // Demo: ebenfalls beenden
     endDemoMode();
-
     location.href = 'index.html';
   });
 }
@@ -231,14 +318,8 @@ if(gasSwitchBtn){
 }
 
 /**
- * Zeit-Helfer
- * - API liefert UTC-Timestamps (Epoch seconds).
- * - Darstellung: Immer deutsche Zeit (Europe/Berlin), inkl. Sommer-/Winterzeit.
- * - Bei Zeitumstellung sollen 23/25 Balken angezeigt werden (das ergibt sich aus der echten
- *   Europe/Berlin-Umrechnung der UTC-Timestamps).
+ * Zeit-Helfer (Europe/Berlin)
  */
-
-/* FIX: immer Europe/Berlin statt Browser-Lokalzeit */
 const BERLIN_TZ = 'Europe/Berlin';
 const dtfBerlin = new Intl.DateTimeFormat('de-DE', {
   timeZone: BERLIN_TZ,
@@ -249,14 +330,12 @@ const dtfBerlin = new Intl.DateTimeFormat('de-DE', {
   hour12: false
 });
 
-/* Hilfsfunktion: holt Berlin-Komponenten aus UTC-Epoch-seconds */
 function berlinPartsFromUtcTs(ts){
   const parts = dtfBerlin.formatToParts(new Date(ts * 1000));
   const obj = {};
   for(const p of parts){
     if(p.type !== 'literal') obj[p.type] = p.value;
   }
-  // obj: { day:"18", month:"02", year:"2026", hour:"13" }
   return {
     year: Number(obj.year),
     month: Number(obj.month),
@@ -264,14 +343,6 @@ function berlinPartsFromUtcTs(ts){
     hour: Number(obj.hour)
   };
 }
-
-/* Dummy-Date, nur damit bestehende Codepfade (getFullYear/getMonth/getDate/getHours) weiter funktionieren.
-   Achtung: Das ist KEIN echtes Berlin-Date-Objekt, aber die Komponenten stimmen für Europe/Berlin. */
-function dtBerlinFromUtcTs(ts){
-  const p = berlinPartsFromUtcTs(ts);
-  return new Date(p.year, p.month-1, p.day, p.hour, 0, 0);
-}
-
 function formatBerlin(ts){
   const p = berlinPartsFromUtcTs(ts);
   return {
@@ -279,7 +350,6 @@ function formatBerlin(ts){
     time: `${pad(p.hour)}:00`
   };
 }
-
 function sameBerlinDay(p, y, m, day){
   return p.year===Number(y) && p.month===Number(m) && p.day===Number(day);
 }
@@ -290,11 +360,331 @@ function sameBerlinYear(p, y){
   return p.year===Number(y);
 }
 
+function pickerLevelCopy(p){
+  return { year: p.year, month: p.month, day: p.day, type: p.type };
+}
+
+function syncComparePickerLevel(){
+  if(!compareActive || !pickers[1]) return;
+  const main = pickers[0];
+  const cmp = pickers[1];
+  if(main.year && !cmp.year){ cmp.year = main.year; }
+  if(main.month && !cmp.month){ cmp.month = main.month; }
+  if(main.day && !cmp.day){ cmp.day = main.day; }
+}
+
+function setDefaultComparePicker(){
+  if(!compareActive || !pickers[1]) return;
+  const main = pickers[0];
+  const cmp = pickers[1];
+
+  if(main.year && !main.month){
+    const y = Number(main.year);
+    cmp.year = (y>2019) ? (y-1) : y;
+    cmp.month = null; cmp.day = null;
+  } else if(main.year && main.month && !main.day){
+    let y = Number(main.year), m = Number(main.month);
+    m = m-1;
+    if(m<1){ m=12; y = y-1; }
+    cmp.year = y; cmp.month = m; cmp.day = null;
+  } else if(main.year && main.month && main.day){
+    let y = Number(main.year), m = Number(main.month), d = Number(main.day);
+    d = d-1;
+    if(d<1){
+      m = m-1;
+      if(m<1){ m=12; y=y-1; }
+      const maxD = new Date(y, m, 0).getDate();
+      d = maxD;
+    }
+    cmp.year = y; cmp.month = m; cmp.day = d;
+  }
+}
+
+function setInitialPickerToToday(){
+  const nowTs = Math.floor(Date.now()/1000);
+  const p = berlinPartsFromUtcTs(nowTs);
+  pickers[0].year = p.year;
+  pickers[0].month = p.month;
+  pickers[0].day = p.day;
+}
+
+function setInitialDemoDefaults(){
+  pickers[0].year = 2026;
+  pickers[0].month = 1;
+  pickers[0].day = 1;
+  selectedDevice = 'Stromzähler';
+}
+
+function getCredentials(){ return localStorage.getItem('credentials'); }
+function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
+
+async function fetchJSON(url, opts = {}){
+  const demo = isDemoMode();
+
+  // Demo: ohne Auth
+  if(demo){
+    const res = await fetch(url, Object.assign({ cache: 'no-store' }, opts));
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    return res.json();
+  }
+
+  // Live: Credentials nötig
+  const creds = getCredentials();
+  if(!creds){
+    alert("Nicht angemeldet.");
+    location.href="index.html";
+    throw new Error("no creds");
+  }
+
+  const headers = Object.assign({}, opts.headers || {}, AUTH_HEADER());
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+
+  if(res.status===401||res.status===403){
+    localStorage.removeItem('credentials');
+    localStorage.removeItem('devices');
+    location.href="index.html";
+    throw new Error("auth");
+  }
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  return res.json();
+}
+
+// --- Demo Helpers (Energie-Report) ---
+
+function formatYYYYMMDD(y, m, d){
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+function demoReportPath(deviceId, yyyy_mm_dd){
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${yyyy_mm_dd}.json`;
+}
+async function tryLoadDemoDayReport(deviceId, y, m, d){
+  const path = demoReportPath(deviceId, formatYYYYMMDD(y, m, d));
+  try{
+    return await fetchJSON(path);
+  }catch(e){
+    return null;
+  }
+}
+async function buildDemoMonthReport(deviceId, y, m){
+  const maxD = new Date(y, m, 0).getDate();
+  const dayReports = [];
+  for(let d=1; d<=maxD; d++){
+    const rep = await tryLoadDemoDayReport(deviceId, y, m, d);
+    if(rep) dayReports.push(rep);
+  }
+  if(dayReports.length === 0) throw new Error(`Keine Demo-Daten für ${y}-${pad(m)} vorhanden.`);
+
+  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
+
+  for(const rep of dayReports){
+    const c = rep?.Consumption?.ReportValues || [];
+    const f = rep?.FeedIn?.ReportValues || [];
+
+    if(c.length){
+      const tsAny = c[0].Timestamp;
+      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.Consumption.ReportValues.push({ Timestamp: tsAny, Delta: sumC });
+      out.Consumption.Sum += sumC;
+      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
+    }
+    if(f.length){
+      const tsAnyF = f[0].Timestamp;
+      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.FeedIn.ReportValues.push({ Timestamp: tsAnyF, Delta: sumF });
+      out.FeedIn.Sum += sumF;
+      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
+    }
+  }
+
+  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  if(!out.FeedIn) out.FeedIn = { Sum:0, Max:0, ReportValues:[] };
+  return out;
+}
+async function buildDemoYearReport(deviceId, y){
+  const monthReports = [];
+  for(let m=1; m<=12; m++){
+    try{
+      const repM = await buildDemoMonthReport(deviceId, y, m);
+      monthReports.push({ m, rep: repM });
+    }catch(_e){
+      // skip
+    }
+  }
+  if(monthReports.length === 0) throw new Error(`Keine Demo-Daten für ${y} vorhanden.`);
+
+  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
+
+  for(const mr of monthReports){
+    const c = mr.rep?.Consumption?.ReportValues || [];
+    const f = mr.rep?.FeedIn?.ReportValues || [];
+    if(c.length){
+      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.Consumption.ReportValues.push({ Timestamp: c[0].Timestamp, Delta: sumC });
+      out.Consumption.Sum += sumC;
+      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
+    }
+    if(f.length){
+      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
+      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
+      out.FeedIn.ReportValues.push({ Timestamp: f[0].Timestamp, Delta: sumF });
+      out.FeedIn.Sum += sumF;
+      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
+    }
+  }
+
+  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
+  return out;
+}
+
+async function loadDevices(){
+  devicesDropdown.innerHTML = '<option>Lade Geräte...</option>';
+  try{
+    let dev = null;
+
+    if(isDemoMode()){
+      dev = await fetchJSON(DEMO.devicesPath);
+    } else {
+      dev = await fetchJSON(apiUrl+'all/devices');
+    }
+
+    if(!Array.isArray(dev) || dev.length===0){
+      devicesDropdown.innerHTML = '<option value="">Keine Geräte</option>';
+      return;
+    }
+
+    const rememberedDemoId = localStorage.getItem(DEMO.storageDemoDeviceId);
+
+    devicesDropdown.innerHTML = dev.map(d=>{
+      const division = (d && typeof d.Division !== 'undefined') ? d.Division : '';
+      return `<option value="${d.DeviceId}" data-division="${division}">${d.DeviceId}</option>`;
+    }).join('');
+
+    if(isDemoMode()){
+      const hasStromzaehler = dev.some(d => d.DeviceId === 'Stromzähler');
+      if(hasStromzaehler){
+        selectedDevice = 'Stromzähler';
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+        devicesDropdown.value = selectedDevice;
+      } else if(rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
+        selectedDevice = rememberedDemoId;
+        devicesDropdown.value = selectedDevice;
+      } else {
+        selectedDevice = dev[0].DeviceId;
+        devicesDropdown.value = selectedDevice;
+        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      }
+    } else {
+      selectedDevice = dev[0].DeviceId;
+      devicesDropdown.value = selectedDevice;
+    }
+
+    devicesDropdown.onchange = ()=>{
+      selectedDevice = devicesDropdown.value;
+      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
+      updateChartTitle();
+      updateVisualization();
+    };
+
+    updateChartTitle();
+    updateVisualization();
+  }catch(e){
+    devicesDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
+    alert("Geräte-Fehler: "+e.message);
+  }
+}
+
+// Zeitraum-Label für Picker
+function periodLabelForPicker(p){
+  if(!p || !p.year) return '';
+  if(p.year && !p.month) return String(p.year);
+  if(p.year && p.month && !p.day) return `${monthNames[p.month-1]} ${p.year}`;
+  if(p.year && p.month && p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year}`;
+  return '';
+}
+
+function updateChartTitle(){
+  const main = pickers[0];
+  let t = isGasDevice ? ("Gas-Verbrauch ("+(gasUnit==='m3'?'m³':'kWh')+")") : "Energiedaten";
+
+  const mainLbl = periodLabelForPicker(pickers[0]);
+  const cmpLbl  = compareActive ? periodLabelForPicker(pickers[1]) : '';
+
+  if(compareActive && mainLbl && cmpLbl){
+    t += ` – ${mainLbl} vs. ${cmpLbl}`;
+  } else {
+    if(main.year && !main.month) t += ` – ${main.year}`;
+    if(main.year && main.month && !main.day) t += ` – ${monthNames[main.month-1]} ${main.year}`;
+    if(main.year && main.month && main.day) t += ` – ${pad(main.day)}.${pad(main.month)}.${main.year}`;
+  }
+
+  if(isDemoMode()){
+    t += " (Demo)";
+  }
+
+  chartTitle.textContent = t;
+}
+
+// Tooltip placement
+function showTooltipAtPageXY(pageX, pageY, html){
+  tooltip.innerHTML = html;
+  tooltip.style.left = `${Math.round(pageX)}px`;
+  tooltip.style.top = `${Math.round(pageY)}px`;
+  tooltip.style.display = 'block';
+  tooltip.setAttribute('aria-hidden', 'false');
+}
+function hideTooltip() {
+  tooltip.style.display = 'none';
+  tooltip.setAttribute('aria-hidden', 'true');
+}
+function placeTooltipAboveRect(rectEl, html){
+  if(!rectEl) return;
+
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.setAttribute('aria-hidden', 'false');
+
+  const rect = rectEl.getBoundingClientRect();
+  const ttW = tooltip.offsetWidth || 0;
+  const ttH = tooltip.offsetHeight || 0;
+
+  let left = rect.left + window.scrollX + rect.width/2 - ttW/2;
+  let top  = rect.top + window.scrollY - ttH - 8;
+
+  const minLeft = window.scrollX + 6;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - ttW - 6;
+  left = Math.max(minLeft, Math.min(maxLeft, left));
+
+  if(top < window.scrollY + 6){
+    top = rect.bottom + window.scrollY + 8;
+  }
+
+  showTooltipAtPageXY(left, top, html);
+}
+
+function tooltipTimeLbl(lbl, picker){
+  const p = picker;
+
+  if(p.year && !p.month) return `${monthNames[lbl-1]} ${p.year}`;
+  if(p.month && !p.day) return `${pad(lbl)}.${pad(p.month)}.${p.year} (DE)`;
+  if(p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year} ${String(lbl)} (DE)`;
+
+  if(lbl instanceof Date){
+    return `${pad(lbl.getDate())}.${pad(lbl.getMonth()+1)}.${lbl.getFullYear()} ${pad(lbl.getHours())}:00 (DE)`;
+  }
+  return String(lbl);
+}
+
 function buildRollPicker(){
   rollpickerContainer.innerHTML = '';
   if(pickers.length === 0){
-    pickers = [{year:null, month:null, day:null, color: pickerColors[0], type:'main'}];
+    pickers = [{year:null, month:null, day:null, type:'main'}];
   }
+
   const container = document.createElement('div');
   container.className = 'rollpicker-inline';
 
@@ -386,7 +776,7 @@ function buildRollPicker(){
     rollWrap.appendChild(roll);
     rollWrap.appendChild(downBtn);
 
-    return {el: rollWrap, refresh: renderWindow};
+    return { el: rollWrap, refresh: renderWindow };
   }
 
   function createPickerSet(picker, idx){
@@ -456,6 +846,7 @@ function buildRollPicker(){
       if(idx===0 && compareActive) { syncComparePickerLevel(); setDefaultComparePicker(); }
       buildRollPicker(); updateChartTitle(); updateVisualization();
     }, null);
+
     set.appendChild(dayGroup);
     dayGroup.appendChild(dayRollObj.el);
 
@@ -491,7 +882,6 @@ function buildRollPicker(){
     addBtn.onclick = ()=>{
       compareActive = true;
       pickers[1] = pickerLevelCopy(pickers[0]);
-      pickers[1].color = pickerColors[1];
       pickers[1].type = "compare";
       setDefaultComparePicker();
       buildRollPicker();
@@ -504,358 +894,13 @@ function buildRollPicker(){
   rollpickerContainer.appendChild(container);
 }
 
-function pickerLevelCopy(p){
-  return { year: p.year, month: p.month, day: p.day, color: p.color, type:p.type };
-}
-
-function syncComparePickerLevel(){
-  if(!compareActive || !pickers[1]) return;
-  const main = pickers[0];
-  const cmp = pickers[1];
-  if(main.year && !cmp.year){ cmp.year = main.year; }
-  if(main.month && !cmp.month){ cmp.month = main.month; }
-  if(main.day && !cmp.day){ cmp.day = main.day; }
-}
-
-function setDefaultComparePicker(){
-  if(!compareActive || !pickers[1]) return;
-  const main = pickers[0];
-  const cmp = pickers[1];
-
-  if(main.year && !main.month){
-    const y = Number(main.year);
-    cmp.year = (y>2019) ? (y-1) : y;
-    cmp.month = null; cmp.day = null;
-  } else if(main.year && main.month && !main.day){
-    let y = Number(main.year), m = Number(main.month);
-    m = m-1;
-    if(m<1){ m=12; y = y-1; }
-    cmp.year = y; cmp.month = m; cmp.day = null;
-  } else if(main.year && main.month && main.day){
-    let y = Number(main.year), m = Number(main.month), d = Number(main.day);
-    d = d-1;
-    if(d<1){
-      m = m-1;
-      if(m<1){ m=12; y=y-1; }
-      const maxD = new Date(y, m, 0).getDate();
-      d = maxD;
-    }
-    cmp.year = y; cmp.month = m; cmp.day = d;
-  }
-}
-
-function setInitialPickerToToday(){
-  /* FIX: "Heute" in deutscher Zeit (Europe/Berlin) */
-  const nowTs = Math.floor(Date.now()/1000);
-  const p = berlinPartsFromUtcTs(nowTs);
-  pickers[0].year = p.year;
-  pickers[0].month = p.month;
-  pickers[0].day = p.day;
-}
-
-/* (5) Demo: fix auf Stromzähler + 01.01.2026 */
-function setInitialDemoDefaults(){
-  pickers[0].year = 2026;
-  pickers[0].month = 1;
-  pickers[0].day = 1;
-  selectedDevice = 'Stromzähler';
-}
-
-function getCredentials(){ return localStorage.getItem('credentials'); }
-function AUTH_HEADER(){ return { Authorization:`Basic ${getCredentials()}` }; }
-
-async function fetchJSON(url, opts = {}){
-  const demo = isDemoMode();
-
-  // Demo: ohne Auth-Header
-  if(demo){
-    const res = await fetch(url, Object.assign({ cache: 'no-store' }, opts));
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    return res.json();
-  }
-
-  // Live: Credentials nötig
-  const creds = getCredentials();
-  if(!creds){ alert("Nicht angemeldet."); location.href="index.html"; throw new Error("no creds"); }
-
-  const headers = Object.assign({}, opts.headers || {}, AUTH_HEADER());
-  const res = await fetch(url, Object.assign({}, opts, { headers }));
-
-  if(res.status===401||res.status===403){
-    localStorage.removeItem('credentials');
-    localStorage.removeItem('devices');
-    location.href="index.html";
-    throw new Error("auth");
-  }
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  return res.json();
-}
-
-// --- Demo Helpers (Energie-Report) ---
-
-function formatYYYYMMDD(y, m, d){
-  return `${y}-${pad(m)}-${pad(d)}`;
-}
-
-function demoReportPath(deviceId, yyyy_mm_dd){
-  // demo/<DeviceId>/YYYY-MM-DD.json
-  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${yyyy_mm_dd}.json`;
-}
-
-// Try to load a demo day report; return null if missing
-async function tryLoadDemoDayReport(deviceId, y, m, d){
-  const path = demoReportPath(deviceId, formatYYYYMMDD(y, m, d));
-  try{
-    return await fetchJSON(path);
-  }catch(e){
-    return null;
-  }
-}
-
-// Aggregate day reports into month report (best-effort)
-async function buildDemoMonthReport(deviceId, y, m){
-  const maxD = new Date(y, m, 0).getDate();
-  const dayReports = [];
-  for(let d=1; d<=maxD; d++){
-    const rep = await tryLoadDemoDayReport(deviceId, y, m, d);
-    if(rep) dayReports.push(rep);
-  }
-  if(dayReports.length === 0) throw new Error(`Keine Demo-Daten für ${y}-${pad(m)} vorhanden.`);
-
-  // Aggregate by summing daily values and keeping day-level timestamps from reports.
-  // We assume each day report contains Consumption.ReportValues (hourly) and optional FeedIn.ReportValues.
-  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
-
-  // For month view in this UI, it expects Consumption.ReportValues containing entries at day granularity
-  // with Timestamp values that map to that day in berlinPartsFromUtcTs.
-  // We'll create synthetic day-entries by summing all entries of each day.
-  for(const rep of dayReports){
-    const c = rep?.Consumption?.ReportValues || [];
-    const f = rep?.FeedIn?.ReportValues || [];
-
-    if(c.length){
-      const tsAny = c[0].Timestamp; // any hourly ts from that day
-      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
-      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
-      out.Consumption.ReportValues.push({ Timestamp: tsAny, Delta: sumC });
-      out.Consumption.Sum += sumC;
-      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
-    }
-    if(f.length){
-      const tsAnyF = f[0].Timestamp;
-      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
-      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
-      out.FeedIn.ReportValues.push({ Timestamp: tsAnyF, Delta: sumF });
-      out.FeedIn.Sum += sumF;
-      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
-    }
-  }
-
-  // Sort by timestamp
-  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
-  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
-
-  // If report lacks FeedIn but consumption exists, keep shape consistent
-  if(!out.FeedIn) out.FeedIn = { Sum:0, Max:0, ReportValues:[] };
-  return out;
-}
-
-// Aggregate month reports into year report (best-effort)
-async function buildDemoYearReport(deviceId, y){
-  const monthReports = [];
-  for(let m=1; m<=12; m++){
-    try{
-      const repM = await buildDemoMonthReport(deviceId, y, m);
-      monthReports.push({ m, rep: repM });
-    }catch(_e){
-      // skip months without data
-    }
-  }
-  if(monthReports.length === 0) throw new Error(`Keine Demo-Daten für ${y} vorhanden.`);
-
-  const out = { Consumption: { Sum:0, Max:0, ReportValues: [] }, FeedIn: { Sum:0, Max:0, ReportValues: [] } };
-
-  for(const mr of monthReports){
-    const c = mr.rep?.Consumption?.ReportValues || [];
-    const f = mr.rep?.FeedIn?.ReportValues || [];
-    if(c.length){
-      const sumC = c.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
-      const maxC = c.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
-      out.Consumption.ReportValues.push({ Timestamp: c[0].Timestamp, Delta: sumC });
-      out.Consumption.Sum += sumC;
-      out.Consumption.Max = Math.max(out.Consumption.Max, maxC);
-    }
-    if(f.length){
-      const sumF = f.reduce((acc, x)=> acc + (x?.Delta ?? 0), 0);
-      const maxF = f.reduce((acc, x)=> Math.max(acc, (x?.Delta ?? 0)), 0);
-      out.FeedIn.ReportValues.push({ Timestamp: f[0].Timestamp, Delta: sumF });
-      out.FeedIn.Sum += sumF;
-      out.FeedIn.Max = Math.max(out.FeedIn.Max, maxF);
-    }
-  }
-
-  out.Consumption.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
-  out.FeedIn.ReportValues.sort((a,b)=>a.Timestamp-b.Timestamp);
-  return out;
-}
-
-async function loadDevices(){
-  devicesDropdown.innerHTML = '<option>Lade Geräte...</option>';
-  try{
-    let dev = null;
-
-    if(isDemoMode()){
-      dev = await fetchJSON(DEMO.devicesPath);
-    } else {
-      dev = await fetchJSON(apiUrl+'all/devices');
-    }
-
-    if(!Array.isArray(dev) || dev.length===0){
-      devicesDropdown.innerHTML = '<option value="">Keine Geräte</option>';
-      return;
-    }
-
-    // For demo, allow remembering last selected demo device
-    const rememberedDemoId = localStorage.getItem(DEMO.storageDemoDeviceId);
-
-    devicesDropdown.innerHTML = dev.map(d=>{
-      const division = (d && typeof d.Division !== 'undefined') ? d.Division : '';
-      return `<option value="${d.DeviceId}" data-division="${division}">${d.DeviceId}</option>`;
-    }).join('');
-
-    if(isDemoMode()){
-      // (5) Demo: immer Stromzähler + 01.01.2026 (und Dropdown passend setzen falls vorhanden)
-      const hasStromzaehler = dev.some(d => d.DeviceId === 'Stromzähler');
-      if(hasStromzaehler){
-        selectedDevice = 'Stromzähler';
-        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
-        devicesDropdown.value = selectedDevice;
-      } else if(rememberedDemoId && dev.some(d=>d.DeviceId === rememberedDemoId)){
-        selectedDevice = rememberedDemoId;
-        devicesDropdown.value = selectedDevice;
-      } else {
-        selectedDevice = dev[0].DeviceId;
-        devicesDropdown.value = selectedDevice;
-        localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
-      }
-    } else {
-      selectedDevice = dev[0].DeviceId;
-      devicesDropdown.value = selectedDevice;
-    }
-
-    devicesDropdown.onchange = ()=>{
-      selectedDevice = devicesDropdown.value;
-      if(isDemoMode()) localStorage.setItem(DEMO.storageDemoDeviceId, selectedDevice);
-      updateChartTitle();
-      updateVisualization();
-    };
-
-    updateChartTitle();
-    updateVisualization();
-  }catch(e){
-    devicesDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
-    alert("Geräte-Fehler: "+e.message);
-  }
-}
-
-/* Zeitraum-Label für Picker */
-function periodLabelForPicker(p){
-  if(!p || !p.year) return '';
-  if(p.year && !p.month) return String(p.year);
-  if(p.year && p.month && !p.day) return `${monthNames[p.month-1]} ${p.year}`;
-  if(p.year && p.month && p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year}`;
-  return '';
-}
-
-function updateChartTitle(){
-  const main = pickers[0];
-
-  let t = isGasDevice ? ("Gas-Verbrauch ("+(gasUnit==='m3'?'m³':'kWh')+")") : "Energiedaten";
-
-  const mainLbl = periodLabelForPicker(pickers[0]);
-  const cmpLbl  = compareActive ? periodLabelForPicker(pickers[1]) : '';
-
-  if(compareActive && mainLbl && cmpLbl){
-    t += ` – ${mainLbl} vs. ${cmpLbl}`;
-  } else {
-    if(main.year && !main.month) t += ` – ${main.year}`;
-    if(main.year && main.month && !main.day) t += ` – ${monthNames[main.month-1]} ${main.year}`;
-    if(main.year && main.month && main.day) t += ` – ${pad(main.day)}.${pad(main.month)}.${main.year}`;
-  }
-
-  if(isDemoMode()){
-    t += " (Demo)";
-  }
-
-  chartTitle.textContent = t;
-}
-
-/**
- * Tooltip: über dem Balken platzieren (nicht mehr via clientX/clientY),
- * damit er zuverlässig sichtbar ist (auch bei SVG/Transform).
- */
-function showTooltipAtPageXY(pageX, pageY, html){
-  tooltip.innerHTML = html;
-  tooltip.style.left = `${Math.round(pageX)}px`;
-  tooltip.style.top = `${Math.round(pageY)}px`;
-  tooltip.style.display = 'block';
-}
-function hideTooltip() {
-  tooltip.style.display = 'none';
-}
-function placeTooltipAboveRect(rectEl, html){
-  if(!rectEl) return;
-  // Tooltip erstmal anzeigen, damit offsetWidth/Height stimmen
-  tooltip.innerHTML = html;
-  tooltip.style.display = 'block';
-
-  const rect = rectEl.getBoundingClientRect();
-  const ttW = tooltip.offsetWidth || 0;
-  const ttH = tooltip.offsetHeight || 0;
-
-  // über dem Balken, zentriert
-  let left = rect.left + window.scrollX + rect.width/2 - ttW/2;
-  let top  = rect.top + window.scrollY - ttH - 8;
-
-  // clamp in viewport
-  const minLeft = window.scrollX + 6;
-  const maxLeft = window.scrollX + document.documentElement.clientWidth - ttW - 6;
-  left = Math.max(minLeft, Math.min(maxLeft, left));
-
-  // falls zu weit oben -> unter den Balken
-  if(top < window.scrollY + 6){
-    top = rect.bottom + window.scrollY + 8;
-  }
-
-  showTooltipAtPageXY(left, top, html);
-}
-
-function tooltipTimeLbl(lbl, picker){
-  const p = picker;
-
-  // Jahransicht: Label = Monat (1-12)
-  if(p.year && !p.month) return `${monthNames[lbl-1]} ${p.year}`;
-
-  // Monatsansicht: Label = Tag (1..max)
-  if(p.month && !p.day) return `${pad(lbl)}.${pad(p.month)}.${p.year} (DE)`;
-
-  // Tagesansicht: Label = Stunde-Label aus xLabels (kann doppelt vorkommen)
-  if(p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year} ${String(lbl)} (DE)`;
-
-  // Fallback für Date-Labels
-  if(lbl instanceof Date){
-    return `${pad(lbl.getDate())}.${pad(lbl.getMonth()+1)}.${lbl.getFullYear()} ${pad(lbl.getHours())}:00 (DE)`;
-  }
-  return String(lbl);
-}
-
 function renderChart(data1, data2){
   const svg = d3.select(chartSvg);
   svg.selectAll("*").remove();
 
-  const margin={top:20,right:20,bottom:70,left:55};
-  const w=960 - margin.left - margin.right;
-  const h=460 - margin.top - margin.bottom;
+  const margin = {top:20, right:20, bottom:70, left:55};
+  const w = 960 - margin.left - margin.right;
+  const h = 460 - margin.top - margin.bottom;
 
   let cons1 = [];
   let feed1 = [];
@@ -872,20 +917,16 @@ function renderChart(data1, data2){
     feed2 = data2?.FeedIn?.ReportValues || [];
   }
 
-  let xLabels=[];
-  const mainMap={};
-  const compareMap={};
+  let xLabels = [];
+  const mainMap = {};
+  const compareMap = {};
 
   const main = pickers[0];
 
-  // Helper: schneller Index nach Timestamp
-  const idxCons1 = new Map(cons1.map(v => [v.Timestamp, v]));
-  const idxCons2 = new Map(cons2.map(v => [v.Timestamp, v]));
   const idxFeed1 = new Map(feed1.map(v => [v.Timestamp, v]));
   const idxFeed2 = new Map(feed2.map(v => [v.Timestamp, v]));
 
   if(main.year && !main.month){
-    // Jahr: 1..12, Zuordnung nach Berlin-Monat
     xLabels = d3.range(1,13);
     xLabels.forEach(m=>{
       mainMap[m] = cons1.find(d=>{
@@ -898,7 +939,6 @@ function renderChart(data1, data2){
       });
     });
   } else if(main.year && main.month && !main.day){
-    // Monat: 1..maxDay, Zuordnung nach Berlin-Tag im Monat
     const maxD = new Date(main.year, main.month, 0).getDate();
     xLabels = d3.range(1, maxD+1);
     xLabels.forEach(dy=>{
@@ -914,25 +954,16 @@ function renderChart(data1, data2){
       });
     });
   } else if(main.year && main.month && main.day){
-    /**
-     * Tag (DE/Berlin, inkl. DST):
-     * - API-Timestamps (UTC) -> Europe/Berlin umgerechnet
-     * - xLabels enthält die tatsächlich vorhandenen Berlin-Stundenlabels (23/24/25 Einträge),
-     *   als Strings, doppelte Stunde kommt doppelt vor (z.B. "02:00" zweimal).
-     */
     const mainDayEntries = cons1
       .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
       .filter(x => sameBerlinDay(x.bp, main.year, main.month, main.day))
       .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
 
-    // xLabels in chronologischer Reihenfolge aus tatsächlichen Entries
     xLabels = mainDayEntries.map(x => `${pad(x.bp.hour)}:00`);
 
-    // mainMap/compareMap keyed by label index (0..len-1), damit doppelte Stunden gehen
     const mainMapByIdx = {};
     const compareMapByIdx = {};
 
-    // Compare: gleiche Logik, nach Compare-Tag (in Berlin-Zeit)
     let compareDayEntries = [];
     if(compareActive && pickers[1]){
       const py = pickers[1].year, pm = pickers[1].month, pd = pickers[1].day;
@@ -942,7 +973,6 @@ function renderChart(data1, data2){
         .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
     }
 
-    // Compare nach Stunde queue'n
     const compareByHourQueue = new Map();
     for(const x of compareDayEntries){
       const hh = x.bp.hour;
@@ -950,7 +980,6 @@ function renderChart(data1, data2){
       compareByHourQueue.get(hh).push(x.e);
     }
 
-    // Fill per displayed main-entry
     for(let i=0;i<mainDayEntries.length;i++){
       const entry = mainDayEntries[i].e;
       mainMapByIdx[i] = entry;
@@ -964,21 +993,19 @@ function renderChart(data1, data2){
       }
     }
 
-    // Ersetze Maps + Labels für restliche Funktion
     xLabels = xLabels.map((lbl, idx) => ({lbl, idx}));
     xLabels.forEach(xl => {
       mainMap[xl.idx] = mainMapByIdx[xl.idx];
       compareMap[xl.idx] = compareMapByIdx[xl.idx];
     });
   } else {
-    // Fallback: nach Timestamp zusammenführen
     let times = cons1.map(c=>c.Timestamp);
     if(cons2.length) for(const c of cons2) if(!times.includes(c.Timestamp)) times.push(c.Timestamp);
     times.sort((a,b)=>a-b);
     xLabels = times;
     xLabels.forEach(ts=>{
-      mainMap[ts] = idxCons1.get(ts);
-      compareMap[ts] = idxCons2.get(ts);
+      mainMap[ts] = cons1.find(x=>x.Timestamp===ts) || null;
+      compareMap[ts] = cons2.find(x=>x.Timestamp===ts) || null;
     });
   }
 
@@ -988,24 +1015,19 @@ function renderChart(data1, data2){
       ? (entry.ConsumptionKWh ?? entry.ConsumptionKwh ?? entry.Delta ?? 0)
       : (entry.Consumption ?? entry.Delta ?? 0);
   }
-
   function powerValueFor(entry){
     if(!entry) return 0;
     return (entry.Delta ?? 0);
   }
 
-  // yMax
   let yMax = 0;
-  const xIter = xLabels;
-  xIter.forEach(lblObj=>{
+  xLabels.forEach(lblObj=>{
     const key = (lblObj && typeof lblObj === 'object' && 'idx' in lblObj) ? lblObj.idx : lblObj;
-
     const m = mainMap[key];
     const c = compareMap[key];
 
     const mv = isGasDevice ? gasValueFor(m) : powerValueFor(m);
     const cv = isGasDevice ? gasValueFor(c) : powerValueFor(c);
-
     yMax = Math.max(yMax, mv, cv);
 
     if(!isGasDevice){
@@ -1017,9 +1039,8 @@ function renderChart(data1, data2){
   });
   if(yMax <= 0) yMax = 0.001;
 
-  const y=d3.scaleLinear().domain([0,yMax]).range([h,0]);
-
-  const x=d3.scaleBand().domain(xLabels).range([0,w]).padding(0.18);
+  const y = d3.scaleLinear().domain([0,yMax]).range([h,0]);
+  const x = d3.scaleBand().domain(xLabels).range([0,w]).padding(0.18);
 
   const svgSel = svg
     .attr('width',  w + margin.left + margin.right)
@@ -1027,8 +1048,8 @@ function renderChart(data1, data2){
     .append('g')
     .attr('transform', `translate(${margin.left},${margin.top})`);
 
-  // X axis labels
-  svgSel.append('g').attr('transform',`translate(0,${h})`)
+  svgSel.append('g')
+    .attr('transform',`translate(0,${h})`)
     .call(d3.axisBottom(x).tickFormat(lbl=>{
       if(lbl && typeof lbl === 'object' && 'lbl' in lbl){
         return lbl.lbl;
@@ -1049,10 +1070,10 @@ function renderChart(data1, data2){
     .attr("transform", "rotate(-50)");
 
   svgSel.append('g')
-    .call(d3.axisLeft(y).ticks(10).tickFormat(t=>t+' '+(isGasDevice?(gasUnit==='m3'?'m³':'kWh'):'kWh')));
+    .call(d3.axisLeft(y).ticks(10).tickFormat(t => t+' '+(isGasDevice ? (gasUnit==='m3'?'m³':'kWh') : 'kWh')));
 
-  let mainOpacity = compareActive?(activePickerIndex===0?1:0.5):1;
-  let compareOpacity = compareActive?(activePickerIndex===1?1:0.5):0.5;
+  let mainOpacity = compareActive ? (activePickerIndex===0?1:0.5) : 1;
+  let compareOpacity = compareActive ? (activePickerIndex===1?1:0.5) : 0.5;
 
   const consWidth = x.bandwidth()*0.44;
   const consXMain = d => x(d);
@@ -1070,19 +1091,17 @@ function renderChart(data1, data2){
            `Verbrauch: ${consVal.toFixed(3)} kWh<br>`+
            `Einspeisung: ${feedVal.toFixed(3)} kWh`;
   }
-
   function keyForDomain(d){
     return (d && typeof d === 'object' && 'idx' in d) ? d.idx : d;
   }
 
-  // Consumption main
+  // Verbrauch (main) - Farbe über CSS (.bar-main)
   svgSel.selectAll('.bar-main').data(xLabels).enter().append('rect')
     .attr('class',d=>activePickerIndex===0?'bar-main highlight':'bar-main')
     .attr('x',d=>consXMain(d))
     .attr('width',consWidth)
     .attr('y',d=>y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
     .attr('height',d=>h-y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
-    .attr('fill',pickerColors[0])
     .style('opacity',mainOpacity)
     .on('mouseover',function(e,d){
       activePickerIndex=0;
@@ -1104,7 +1123,7 @@ function renderChart(data1, data2){
     })
     .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
 
-  // Consumption compare
+  // Vergleich Verbrauch - Farbe über CSS (.bar-compare)
   if(compareActive){
     svgSel.selectAll('.bar-compare').data(xLabels).enter().append('rect')
       .attr('class',d=>activePickerIndex===1?'bar-compare highlight':'bar-compare')
@@ -1112,7 +1131,6 @@ function renderChart(data1, data2){
       .attr('width',consWidth)
       .attr('y',d=>y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
       .attr('height',d=>h-y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
-      .attr('fill',pickerColors[1])
       .style('opacity',compareOpacity)
       .on('mouseover',function(e,d){
         activePickerIndex=1;
@@ -1135,7 +1153,7 @@ function renderChart(data1, data2){
       .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
   }
 
-  // Feed-in bars (remain green), tooltip stable too
+  // Einspeisung - Farben über CSS (.feed-main/.feed-compare)
   if(!isGasDevice){
     svgSel.selectAll('.feed-main').data(xLabels).enter().append('rect')
       .attr('class',d=>activePickerIndex===0?'feed-main highlight':'feed-main')
@@ -1153,7 +1171,6 @@ function renderChart(data1, data2){
         const f = m ? (idxFeed1.get(m.Timestamp) || null) : null;
         return h - y(f?.Delta||0);
       })
-      .attr('fill','#47be47')
       .style('opacity',mainOpacity)
       .on('mouseover',function(e,d){
         activePickerIndex=0;
@@ -1192,7 +1209,6 @@ function renderChart(data1, data2){
           const f2 = c ? (idxFeed2.get(c.Timestamp) || null) : null;
           return h - y(f2?.Delta||0);
         })
-        .attr('fill','#47be47')
         .style('opacity',compareOpacity)
         .on('mouseover',function(e,d){
           activePickerIndex=1;
@@ -1216,6 +1232,7 @@ function renderChart(data1, data2){
     }
   }
 
+  // Aggregate
   function sumDisplayed(){
     let sMainCons=0, sMainFeed=0, sCmpCons=0, sCmpFeed=0;
 
@@ -1252,15 +1269,16 @@ function renderChart(data1, data2){
 
   sumDisplayed();
   renderSummary();
-  if(tableContainer.style.display === 'block') renderTablesFromChart(xLabels, mainMap, compareMap, idxFeed1, idxFeed2);
+  if(tableContainer.style.display === 'block'){
+    renderTablesFromChart(xLabels, mainMap, compareMap, idxFeed1, idxFeed2);
+  }
 }
 
-/* Summary 2 Nachkommastellen + deutsches Komma + Zeitraumlabel */
+// Summary formatting
 function fmt2de(v){
   const n = Number(v ?? 0);
   return n.toFixed(2).replace('.', ',');
 }
-
 function renderSummary(){
   const mainLbl = periodLabelForPicker(pickers[0]) || 'Ausgewählter Zeitraum';
   const cmpLbl  = (compareActive && pickers[1]) ? (periodLabelForPicker(pickers[1]) || 'Vergleichszeitraum') : '';
@@ -1282,15 +1300,12 @@ function renderSummary(){
 }
 
 function getTsForRow(lbl, picker, entry){
-  // Tagesansicht DST: domain item ist Objekt {lbl, idx}. Timestamp kommt vom entry.
   if(entry && typeof entry.Timestamp === 'number') return entry.Timestamp;
 
   if(typeof lbl === 'number' && picker && !picker.day && !picker.month && !picker.year){
     return lbl;
   }
 
-  // Für "keine entry vorhanden": wir approximieren (DE) -> wir nutzen Date() lokal als Fallback
-  // (diese Zeilen werden primär für Tabellenzeilen ohne Daten genutzt).
   if(picker?.year){
     const y = Number(picker.year);
     const m = Number(picker.month||1);
@@ -1313,7 +1328,7 @@ function getTsForRow(lbl, picker, entry){
 function renderTableBlock(title, rows, opts){
   const fmt3 = v => Number(v ?? 0).toFixed(3).replace('.', ',');
   let html = `<div class="card" style="margin-top:12px;padding:12px;">`;
-  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">`;
+  html += `<div class="pf-row pf-row--tight" style="justify-content:space-between;margin-bottom:10px;">`;
   html += `<div class="kv" style="font-weight:700">${title}</div>`;
   html += `<button class="btn" type="button" data-export="${opts.exportKey}">CSV Export</button>`;
   html += `</div>`;
@@ -1326,7 +1341,6 @@ function renderTableBlock(title, rows, opts){
   } else {
     html += `<th>Verbrauch [kWh]</th><th>Einspeisung [kWh]</th>`;
   }
-
   html += `</tr></thead><tbody>`;
 
   for(const r of rows){
@@ -1453,7 +1467,6 @@ async function updateVisualization(){
   const selOpt = devicesDropdown.options[devicesDropdown.selectedIndex];
   const division = Number(selOpt?.dataset?.division);
 
-  // In Demo kann Division fehlen -> default 1 (Strom)
   isGasDevice = (division === 4);
 
   gasSwitchContainer.style.display = isGasDevice ? 'flex' : 'none';
@@ -1477,7 +1490,6 @@ async function updateVisualization(){
       throw new Error('Ungültige Picker-Auswahl.');
     }
 
-    // Live API
     let url = apiUrl + selectedDevice + '/report';
     if(y && !m) url += `?year=${y}`;
     else if(y && m && !d) url += `?year=${y}&month=${m}`;
@@ -1498,7 +1510,7 @@ async function updateVisualization(){
   if(!isGasDevice && !data1.FeedIn) data1.FeedIn = {Sum:0,Max:0,ReportValues:[]};
   if(isGasDevice && !data1.Gas) data1.Gas = {Sum:0,ReportValues:[]};
 
-  // HT/NT-Erkennung (nur Strom / Consumption)
+  // HT/NT-Erkennung
   isHtNtDevice = false;
   try{
     if(!isGasDevice){
@@ -1527,12 +1539,10 @@ async function updateVisualization(){
   }
 
   renderChart(data1, data2);
-
   loadingIndicator.style.visibility = 'hidden';
 }
 
-/* Initialisierung / Event-Handler */
-
+// Table toggle
 toggleTableBtn.addEventListener('click', () => {
   if(tableContainer.style.display === 'block'){
     tableContainer.style.display = 'none';
@@ -1546,7 +1556,7 @@ toggleTableBtn.addEventListener('click', () => {
 
 (function init(){
   if(isDemoMode()){
-    setInitialDemoDefaults();   // (5) Stromzähler + 01.01.2026
+    setInitialDemoDefaults();
   } else {
     setInitialPickerToToday();
   }

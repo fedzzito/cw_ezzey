@@ -1,9 +1,21 @@
+/* powerfox/css/style.css
+   Aktualisiert: 2026-02-20
+   Ziel dieser Version:
+   - Ein einziger, einheitlicher Kacheltyp (.card) — weiß mit sichtbarer, aber nicht schwarzen Umrandung
+   - Header optisch wie Kachel (aber semantisch erhalten)
+   - Alle sichtbaren Bereiche (Picker, Geräteauswahl, Chart-Wrapper, Tabelle, Dropzone) erhalten card-Optik
+   - Kacheln haben kleinen Abstand (gap) und berühren sich nicht
+   - Spenden-/Feedback-Button ist einzeilig (passt sich der Textlänge an)
+   - Keine Änderung an JS-IDs; nur visuelle/strukturierende Regeln in CSS
+*/
+
+/* ---------------------
    Design-Token
    --------------------- */
 :root{
-  --primary: #0b5ed7;
-  --accent: #3b82f6;
-  --bg: #eef5ff;
+  --primary: #0f5132;
+  --accent: #47be47;
+  --bg: #EAF6EA;
   --surface: #ffffff;
   --text: #0f1720;
   --muted: #6b7280;
@@ -11,7 +23,7 @@
   --radius: 12px;
   --gap-xs: 6px;
   --gap-s: 12px;
-  --gap-m: 16px;
+  --gap-m: 16px; /* kleiner Abstand zwischen Kacheln, wie gewünscht */
   --gap-l: 28px;
   --max-width: 1200px;
 
@@ -19,7 +31,7 @@
   --card-border: rgba(15,23,32,0.12);
   --card-border-strong: rgba(15,23,32,0.16);
 
-  --focus-ring: 0 0 0 4px rgba(11,94,215,0.18);
+  --focus-ring: 0 0 0 4px rgba(15,81,50,0.12);
   --shadow: 0 10px 30px rgba(15,23,32,0.06);
 
   /* NEU: zusätzlicher Top-Abstand für den Header (damit Donate-Float nichts überdeckt) */

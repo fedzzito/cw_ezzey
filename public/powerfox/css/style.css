@@ -13,13 +13,17 @@
    Design-Token
    --------------------- */
 :root{
+  /* Base theme */
   --primary: #0f5132;
   --accent: #47be47;
   --bg: #EAF6EA;
   --surface: #ffffff;
   --text: #0f1720;
   --muted: #6b7280;
+
+  /* semantic */
   --danger: #ff4d4f;
+
   --radius: 12px;
   --gap-xs: 6px;
   --gap-s: 12px;
@@ -34,8 +38,35 @@
   --focus-ring: 0 0 0 4px rgba(15,81,50,0.12);
   --shadow: 0 10px 30px rgba(15,23,32,0.06);
 
-  /* NEU: zusätzlicher Top-Abstand für den Header (damit Donate-Float nichts überdeckt) */
+  /* Header offset (Powerfox) */
   --header-top-offset: 60px;
+
+  /* ---------------------
+     NEW: Chart / Picker color tokens (alles über CSS steuerbar)
+     --------------------- */
+
+  /* Verbrauch (main) */
+  --consumption-color: var(--primary);
+
+  /* Vergleich-Verbrauch */
+  --consumption-compare-color: var(--danger);
+
+  /* Einspeisung (main) */
+  --feedin-color: var(--accent);
+
+  /* Vergleich-Einspeisung (default: same as feed-in, can be overridden) */
+  --feedin-compare-color: var(--accent);
+
+  /* Datumpicker (selected) */
+  --picker-selected-bg: var(--primary);
+  --picker-selected-text: #fff;
+
+  /* Spinner (border top) */
+  --spinner-top-color: var(--primary);
+
+  /* Tooltip (optional tokens) */
+  --tooltip-bg: rgba(0,0,0,0.82);
+  --tooltip-text: #fff;
 }
 
 /* ---------------------
@@ -105,8 +136,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
   box-shadow:var(--shadow);
   border:1px solid var(--card-border);
 
-  /* vorher: margin-bottom: var(--gap-m); */
-  margin-top: var(--header-top-offset); /* NEU: Header rutscht auf allen Powerfox Seiten nach unten */
+  margin-top: var(--header-top-offset);
   margin-bottom: var(--gap-m);
 }
 
@@ -232,20 +262,50 @@ input:focus, select:focus, textarea:focus{ outline:none; box-shadow:var(--focus-
    Charts & Tooltip
    --------------------- */
 svg{ width:100%; height:auto; display:block; }
-.tooltip{ position:absolute; pointer-events:none; background:rgba(0,0,0,0.82); color:#fff; padding:8px; border-radius:6px; font-size:13px; display:none; z-index:2000; }
 
-/* Chart element colors (kept consistent) */
-.bar-main{ fill: var(--primary); }
-.bar-compare{ fill: var(--danger); }
-/* feed bars: keep yellow fill but add a thin, tiefschwarzer Rand für bessere Lesbarkeit */
+/* Chart element colors (now via dedicated tokens) */
+.bar-main{ fill: var(--consumption-color); }
+.bar-compare{ fill: var(--consumption-compare-color); }
+
+/* Einspeisung */
+.feed-main{ fill: var(--feedin-color); }
+.feed-compare{ fill: var(--feedin-compare-color); }
+
+/* keep stroke for feed bars (as before) */
 .feed-main, .feed-compare{
-  fill: #f6e05e;
   stroke: #000;          /* tiefschwarzer Rand */
   stroke-width: 1px;     /* dünn, aber sichtbar */
   stroke-opacity: 1;
   shape-rendering: crispEdges;
   stroke-linejoin: round;
   stroke-linecap: butt;
+}
+
+/* Tooltip (uses tokens; falls per-page tooltip overrides exist, those can still override) */
+.tooltip{
+  position:absolute;
+  pointer-events:none;
+  background:var(--tooltip-bg);
+  color:var(--tooltip-text);
+  padding:8px;
+  border-radius:6px;
+  font-size:13px;
+  display:none;
+  z-index:2000;
+}
+
+/* ---------------------
+   Picker theming hooks (selected state via CSS token)
+   (wir ändern keine Struktur/IDs; falls die Seite .picker-item.selected nutzt, greift das hier)
+   --------------------- */
+.picker-item.selected{
+  background: var(--picker-selected-bg);
+  color: var(--picker-selected-text);
+}
+
+/* Spinner hook (falls die Seite .spinner nutzt) */
+.spinner{
+  border-top-color: var(--spinner-top-color);
 }
 
 /* ---------------------
@@ -258,7 +318,6 @@ svg{ width:100%; height:auto; display:block; }
   .site-header{ flex-direction:column; align-items:center; }
   .site-header h1{ text-align:center; font-size:1rem; }
 
-  /* auf mobilen Geräten etwas weniger Top-Offset */
   :root{ --header-top-offset: 48px; }
 
   .app{ margin:16px; padding:16px; }

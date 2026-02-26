@@ -14,7 +14,20 @@
     <!-- Header -->
     <header class="site-header" role="banner" aria-label="Seitenkopf">
       <h1>powerfox Energiedaten Analyse</h1>
-      <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+
+      <!-- rechts im Header wie in powerfox_energie.html: ezzey.de Button + Logout -->
+      <div class="site-header__actions" aria-label="Header Aktionen">
+        <button
+          id="ezzeyBtn"
+          class="btn"
+          type="button"
+          onclick="window.open('https://cw-ezzey.pages.dev/','_blank')"
+        >
+          ezzey.de
+        </button>
+
+        <button id="logoutBtn" class="btn" aria-label="Abmelden">Abmelden</button>
+      </div>
     </header>
 
     <!-- Main content container -->
@@ -31,10 +44,14 @@
             <label for="password">Passwort</label>
             <input id="password" type="password" name="password" required autocomplete="current-password" />
           </div>
-          <div style="display:flex;gap:12px;margin-top:12px;">
+
+          <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;align-items:center;">
             <button id="loginFormBtn" class="btn" type="submit">Einloggen</button>
             <button id="loginAsGuest" class="btn" type="button" aria-hidden="true" style="display:none;">Gast</button>
             <button id="demoBtn" class="btn" type="button">Demo starten</button>
+
+            <!-- Text rechts neben Demo starten -->
+            <span class="kv">Aktuell sind Demo-Daten für Stromzähler (ink. HT/NT) für Januar 2026 vorhanden</span>
           </div>
         </form>
 

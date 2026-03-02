@@ -318,7 +318,11 @@ if(gasSwitchBtn){
 }
 
 /**
- * Zeit-Helfer (Europe/Berlin)
+ * ZEIT / TIMESTAMPS
+ * - API-Timestamps sind UTC (Epoch seconds).
+ * - Darstellung/Zuordnung erfolgt in Europe/Berlin (inkl. Sommer-/Winterzeit).
+ * - Für Tagesansicht: API liefert UTC-basiert. Wir laden Vortag+Tag (UTC) und schneiden Berlin-Tag heraus.
+ *   Dadurch sind 00:00.. korrekt und DST wird 23/25 Balken.
  */
 const BERLIN_TZ = 'Europe/Berlin';
 const dtfBerlin = new Intl.DateTimeFormat('de-DE', {
@@ -346,7 +350,7 @@ function berlinPartsFromUtcTs(ts){
 function formatBerlin(ts){
   const p = berlinPartsFromUtcTs(ts);
   return {
-    date: `${p.day}.${pad(p.month)}.${p.year}`,
+    date: `${pad(p.day)}.${pad(p.month)}.${p.year}`,
     time: `${pad(p.hour)}:00`
   };
 }
@@ -358,6 +362,24 @@ function sameBerlinMonth(p, y, m){
 }
 function sameBerlinYear(p, y){
   return p.year===Number(y);
+}
+
+/**
+ * Ermittelt UTC-Timestamp für Berlin 00:00 eines Datums (robust, DST-sicher).
+ */
+function berlinMidnightUtcTs(year, month, day){
+  const y = Number(year), m = Number(month), d = Number(day);
+  const approx = Math.floor(Date.UTC(y, m-1, d, 12, 0, 0) / 1000);
+
+  let best = null;
+  for(let offset=-36; offset<=36; offset++){
+    const ts = approx + offset*3600;
+    const bp = berlinPartsFromUtcTs(ts);
+    if(bp.year===y && bp.month===m && bp.day===d && bp.hour===0){
+      if(best === null || ts < best) best = ts;
+    }
+  }
+  return best;
 }
 
 function pickerLevelCopy(p){
@@ -666,17 +688,27 @@ function placeTooltipAboveRect(rectEl, html){
   showTooltipAtPageXY(left, top, html);
 }
 
-function tooltipTimeLbl(lbl, picker){
-  const p = picker;
+/**
+ * Tooltip-Zeitlabel: immer Intervall-START anzeigen.
+ */
+function tooltipTimeLbl(domainLabel, picker, intervalStartTs){
+  if(typeof intervalStartTs === 'number' && intervalStartTs > 0){
+    const p = berlinPartsFromUtcTs(intervalStartTs);
 
-  if(p.year && !p.month) return `${monthNames[lbl-1]} ${p.year}`;
-  if(p.month && !p.day) return `${pad(lbl)}.${pad(p.month)}.${p.year} (DE)`;
-  if(p.day) return `${pad(p.day)}.${pad(p.month)}.${p.year} ${String(lbl)} (DE)`;
-
-  if(lbl instanceof Date){
-    return `${pad(lbl.getDate())}.${pad(lbl.getMonth()+1)}.${lbl.getFullYear()} ${pad(lbl.getHours())}:00 (DE)`;
+    if(picker.year && !picker.month){
+      return `${monthNames[p.month-1]} ${p.year} (DE)`;
+    }
+    if(picker.month && !picker.day){
+      // Monatsansicht: Tagesbalken repräsentieren 00:00.. (Start des Tages)
+      return `${pad(p.day)}.${pad(p.month)}.${p.year} 00:00 (DE)`;
+    }
+    if(picker.day){
+      // Tagesansicht: Stunde ist Start 00..23 (00:00 = 00-01 Uhr)
+      return `${pad(p.day)}.${pad(p.month)}.${p.year} ${pad(p.hour)}:00 (DE)`;
+    }
+    return `${pad(p.day)}.${pad(p.month)}.${p.year} ${pad(p.hour)}:00 (DE)`;
   }
-  return String(lbl);
+  return String(domainLabel);
 }
 
 function buildRollPicker(){
@@ -894,6 +926,147 @@ function buildRollPicker(){
   rollpickerContainer.appendChild(container);
 }
 
+/**
+ * Domain-Build: erzeugt die X-Achse inkl. startTs pro Slot (für Tooltip/Tabelle),
+ * und Maps für main/compare.
+ */
+function buildDomainAndMaps(cons1, cons2, mainPicker, comparePicker){
+  const domain = [];
+  const mainMapByKey = {};
+  const compareMapByKey = {};
+
+  function findEntryByBerlinParts(list, predicate){
+    return list.find(d => {
+      const bp = berlinPartsFromUtcTs(d.Timestamp);
+      return predicate(bp, d);
+    }) || null;
+  }
+
+  if(mainPicker.year && !mainPicker.month){
+    for(let m=1;m<=12;m++){
+      const key = `m-${m}`;
+      const eMain = findEntryByBerlinParts(cons1, (bp)=> sameBerlinYear(bp, mainPicker.year) && bp.month===m);
+      const eCmp = (compareActive && comparePicker)
+        ? findEntryByBerlinParts(cons2, (bp)=> sameBerlinYear(bp, comparePicker.year ?? mainPicker.year) && bp.month===m)
+        : null;
+
+      domain.push({ key, label: monthNames[m-1], startTs: eMain?.Timestamp ?? 0, meta:{kind:'month', month:m} });
+      mainMapByKey[key] = eMain;
+      compareMapByKey[key] = eCmp;
+    }
+    return { domain, mainMapByKey, compareMapByKey };
+  }
+
+  if(mainPicker.year && mainPicker.month && !mainPicker.day){
+    const maxD = new Date(mainPicker.year, mainPicker.month, 0).getDate();
+    for(let d=1; d<=maxD; d++){
+      const key = `d-${d}`;
+      const eMain = findEntryByBerlinParts(cons1, (bp)=> sameBerlinMonth(bp, mainPicker.year, mainPicker.month) && bp.day===d);
+      const eCmp = (compareActive && comparePicker)
+        ? findEntryByBerlinParts(cons2, (bp)=> {
+            const cy = comparePicker.year ?? mainPicker.year;
+            const cm = comparePicker.month ?? mainPicker.month;
+            return sameBerlinMonth(bp, cy, cm) && bp.day===d;
+          })
+        : null;
+
+      domain.push({ key, label: String(d)+'.', startTs: eMain?.Timestamp ?? 0, meta:{kind:'day', day:d} });
+      mainMapByKey[key] = eMain;
+      compareMapByKey[key] = eCmp;
+    }
+    return { domain, mainMapByKey, compareMapByKey };
+  }
+
+  if(mainPicker.year && mainPicker.month && mainPicker.day){
+    const y = Number(mainPicker.year), m = Number(mainPicker.month), d = Number(mainPicker.day);
+
+    const entries = cons1
+      .map(e => ({ e, bp: berlinPartsFromUtcTs(e.Timestamp) }))
+      .filter(x => sameBerlinDay(x.bp, y, m, d))
+      .sort((a,b)=>a.e.Timestamp - b.e.Timestamp);
+
+    const qMain = new Map();
+    for(const x of entries){
+      const hh = x.bp.hour;
+      if(!qMain.has(hh)) qMain.set(hh, []);
+      qMain.get(hh).push(x.e);
+    }
+
+    const qCmp = new Map();
+    if(compareActive && comparePicker){
+      const py = Number(comparePicker.year), pm = Number(comparePicker.month), pd = Number(comparePicker.day);
+      const entriesCmp = cons2
+        .map(e => ({ e, bp: berlinPartsFromUtcTs(e.Timestamp) }))
+        .filter(x => sameBerlinDay(x.bp, py, pm, pd))
+        .sort((a,b)=>a.e.Timestamp - b.e.Timestamp);
+
+      for(const x of entriesCmp){
+        const hh = x.bp.hour;
+        if(!qCmp.has(hh)) qCmp.set(hh, []);
+        qCmp.get(hh).push(x.e);
+      }
+    }
+
+    let repeatedHour = null;
+    let missingHour = null;
+    for(let hh=0; hh<=23; hh++){
+      const len = (qMain.get(hh) || []).length;
+      if(len === 0) missingHour = hh;
+      if(len >= 2) repeatedHour = hh;
+    }
+
+    let midnightUtc = berlinMidnightUtcTs(y, m, d);
+    if(midnightUtc === null){
+      const earliest = entries.length ? entries[0].e.Timestamp : 0;
+      midnightUtc = earliest ? (earliest - (earliest % 3600)) : 0;
+    }
+
+    let slotIdx = 0;
+    for(let hh=0; hh<=23; hh++){
+      if(missingHour !== null && hh === missingHour) continue;
+
+      const repeat = (repeatedHour !== null && hh === repeatedHour) ? 2 : 1;
+
+      for(let rep=0; rep<repeat; rep++){
+        const key = `h-${hh}-${rep}`;
+        const label = `${pad(hh)}:00`; // 00:00 entspricht 00-01 Uhr Verbrauch
+
+        const qm = qMain.get(hh) || [];
+        const mainEntry = qm.length ? qm.shift() : null;
+
+        const qc = qCmp.get(hh) || [];
+        const cmpEntry = qc.length ? qc.shift() : null;
+
+        const slotStartTs = midnightUtc ? (midnightUtc + slotIdx*3600) : 0;
+        slotIdx++;
+
+        domain.push({
+          key,
+          label,
+          startTs: mainEntry?.Timestamp ?? slotStartTs,
+          meta:{kind:'hour', hour:hh, rep, slotStartTs}
+        });
+
+        mainMapByKey[key] = mainEntry;
+        compareMapByKey[key] = compareActive ? cmpEntry : null;
+      }
+    }
+
+    return { domain, mainMapByKey, compareMapByKey };
+  }
+
+  // Fallback
+  const times = Array.from(new Set([...(cons1.map(c=>c.Timestamp)), ...(cons2.map(c=>c.Timestamp))])).sort((a,b)=>a-b);
+  for(const ts of times){
+    const bp = berlinPartsFromUtcTs(ts);
+    const key = `ts-${ts}`;
+    domain.push({ key, label: `${pad(bp.hour)}:00`, startTs: ts, meta:{kind:'ts'} });
+    mainMapByKey[key] = cons1.find(x=>x.Timestamp===ts) || null;
+    compareMapByKey[key] = cons2.find(x=>x.Timestamp===ts) || null;
+  }
+  return { domain, mainMapByKey, compareMapByKey };
+}
+
 function renderChart(data1, data2){
   const svg = d3.select(chartSvg);
   svg.selectAll("*").remove();
@@ -917,97 +1090,10 @@ function renderChart(data1, data2){
     feed2 = data2?.FeedIn?.ReportValues || [];
   }
 
-  let xLabels = [];
-  const mainMap = {};
-  const compareMap = {};
-
-  const main = pickers[0];
-
   const idxFeed1 = new Map(feed1.map(v => [v.Timestamp, v]));
   const idxFeed2 = new Map(feed2.map(v => [v.Timestamp, v]));
 
-  if(main.year && !main.month){
-    xLabels = d3.range(1,13);
-    xLabels.forEach(m=>{
-      mainMap[m] = cons1.find(d=>{
-        const bp = berlinPartsFromUtcTs(d.Timestamp);
-        return sameBerlinYear(bp, main.year) && bp.month===m;
-      });
-      compareMap[m] = cons2.find(d=>{
-        const bp = berlinPartsFromUtcTs(d.Timestamp);
-        return sameBerlinYear(bp, pickers[1]?.year ?? main.year) && bp.month===m;
-      });
-    });
-  } else if(main.year && main.month && !main.day){
-    const maxD = new Date(main.year, main.month, 0).getDate();
-    xLabels = d3.range(1, maxD+1);
-    xLabels.forEach(dy=>{
-      mainMap[dy] = cons1.find(d=>{
-        const bp = berlinPartsFromUtcTs(d.Timestamp);
-        return sameBerlinMonth(bp, main.year, main.month) && bp.day===dy;
-      });
-      compareMap[dy] = cons2.find(d=>{
-        const bp = berlinPartsFromUtcTs(d.Timestamp);
-        const py = pickers[1]?.year ?? main.year;
-        const pm = pickers[1]?.month ?? main.month;
-        return sameBerlinMonth(bp, py, pm) && bp.day===dy;
-      });
-    });
-  } else if(main.year && main.month && main.day){
-    const mainDayEntries = cons1
-      .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
-      .filter(x => sameBerlinDay(x.bp, main.year, main.month, main.day))
-      .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
-
-    xLabels = mainDayEntries.map(x => `${pad(x.bp.hour)}:00`);
-
-    const mainMapByIdx = {};
-    const compareMapByIdx = {};
-
-    let compareDayEntries = [];
-    if(compareActive && pickers[1]){
-      const py = pickers[1].year, pm = pickers[1].month, pd = pickers[1].day;
-      compareDayEntries = cons2
-        .map(e => ({e, bp: berlinPartsFromUtcTs(e.Timestamp)}))
-        .filter(x => sameBerlinDay(x.bp, py, pm, pd))
-        .sort((a,b)=>a.e.Timestamp-b.e.Timestamp);
-    }
-
-    const compareByHourQueue = new Map();
-    for(const x of compareDayEntries){
-      const hh = x.bp.hour;
-      if(!compareByHourQueue.has(hh)) compareByHourQueue.set(hh, []);
-      compareByHourQueue.get(hh).push(x.e);
-    }
-
-    for(let i=0;i<mainDayEntries.length;i++){
-      const entry = mainDayEntries[i].e;
-      mainMapByIdx[i] = entry;
-
-      if(compareActive && pickers[1]){
-        const hh = mainDayEntries[i].bp.hour;
-        const q = compareByHourQueue.get(hh) || [];
-        compareMapByIdx[i] = q.length ? q.shift() : null;
-      } else {
-        compareMapByIdx[i] = null;
-      }
-    }
-
-    xLabels = xLabels.map((lbl, idx) => ({lbl, idx}));
-    xLabels.forEach(xl => {
-      mainMap[xl.idx] = mainMapByIdx[xl.idx];
-      compareMap[xl.idx] = compareMapByIdx[xl.idx];
-    });
-  } else {
-    let times = cons1.map(c=>c.Timestamp);
-    if(cons2.length) for(const c of cons2) if(!times.includes(c.Timestamp)) times.push(c.Timestamp);
-    times.sort((a,b)=>a-b);
-    xLabels = times;
-    xLabels.forEach(ts=>{
-      mainMap[ts] = cons1.find(x=>x.Timestamp===ts) || null;
-      compareMap[ts] = cons2.find(x=>x.Timestamp===ts) || null;
-    });
-  }
+  const { domain, mainMapByKey, compareMapByKey } = buildDomainAndMaps(cons1, cons2, pickers[0], pickers[1]);
 
   function gasValueFor(entry){
     if(!entry) return 0;
@@ -1021,10 +1107,9 @@ function renderChart(data1, data2){
   }
 
   let yMax = 0;
-  xLabels.forEach(lblObj=>{
-    const key = (lblObj && typeof lblObj === 'object' && 'idx' in lblObj) ? lblObj.idx : lblObj;
-    const m = mainMap[key];
-    const c = compareMap[key];
+  for(const it of domain){
+    const m = mainMapByKey[it.key];
+    const c = compareMapByKey[it.key];
 
     const mv = isGasDevice ? gasValueFor(m) : powerValueFor(m);
     const cv = isGasDevice ? gasValueFor(c) : powerValueFor(c);
@@ -1036,11 +1121,11 @@ function renderChart(data1, data2){
       if(mFeed) yMax = Math.max(yMax, mFeed.Delta||0);
       if(cFeed) yMax = Math.max(yMax, cFeed.Delta||0);
     }
-  });
+  }
   if(yMax <= 0) yMax = 0.001;
 
   const y = d3.scaleLinear().domain([0,yMax]).range([h,0]);
-  const x = d3.scaleBand().domain(xLabels).range([0,w]).padding(0.18);
+  const x = d3.scaleBand().domain(domain.map(d=>d.key)).range([0,w]).padding(0.18);
 
   const svgSel = svg
     .attr('width',  w + margin.left + margin.right)
@@ -1048,36 +1133,28 @@ function renderChart(data1, data2){
     .append('g')
     .attr('transform', `translate(${margin.left},${margin.top})`);
 
-  svgSel.append('g')
-    .attr('transform',`translate(0,${h})`)
-    .call(d3.axisBottom(x).tickFormat(lbl=>{
-      if(lbl && typeof lbl === 'object' && 'lbl' in lbl){
-        return lbl.lbl;
-      }
-      if(pickers[0].year && !pickers[0].month) return monthNames[lbl-1];
-      if(pickers[0].month && !pickers[0].day) return lbl+'.';
-      if(pickers[0].day) return pad(lbl)+':00';
-      if(typeof lbl === 'number'){
-        const bp = berlinPartsFromUtcTs(lbl);
-        return pad(bp.hour)+':00';
-      }
-      return lbl;
-    }))
-    .selectAll("text")
+  const xAxisG = svgSel.append('g')
+    .attr('transform', `translate(0,${h})`)
+    .call(d3.axisBottom(x).tickFormat(key=>{
+      const it = domain.find(d=>d.key===key);
+      return it ? it.label : key;
+    }));
+
+  xAxisG.selectAll("text")
     .style("text-anchor", "end")
     .attr("dx", "-0.8em")
     .attr("dy", "0.15em")
     .attr("transform", "rotate(-50)");
 
   svgSel.append('g')
-    .call(d3.axisLeft(y).ticks(10).tickFormat(t => t+' '+(isGasDevice ? (gasUnit==='m3'?'m³':'kWh') : 'kWh')));
+    .call(d3.axisLeft(y).ticks(10).tickFormat(t=>t+' '+(isGasDevice?(gasUnit==='m3'?'m³':'kWh'):'kWh')));
 
-  let mainOpacity = compareActive ? (activePickerIndex===0?1:0.5) : 1;
-  let compareOpacity = compareActive ? (activePickerIndex===1?1:0.5) : 0.5;
+  let mainOpacity = compareActive?(activePickerIndex===0?1:0.5):1;
+  let compareOpacity = compareActive?(activePickerIndex===1?1:0.5):0.5;
 
   const consWidth = x.bandwidth()*0.44;
-  const consXMain = d => x(d);
-  const consXCompare = d => x(d)+x.bandwidth()*0.44;
+  const consXMain = key => x(key);
+  const consXCompare = key => x(key)+x.bandwidth()*0.44;
 
   const feedWidth = consWidth/3;
   const feedXFromConsX = consX => consX + (consWidth - feedWidth);
@@ -1091,155 +1168,146 @@ function renderChart(data1, data2){
            `Verbrauch: ${consVal.toFixed(3)} kWh<br>`+
            `Einspeisung: ${feedVal.toFixed(3)} kWh`;
   }
-  function keyForDomain(d){
-    return (d && typeof d === 'object' && 'idx' in d) ? d.idx : d;
-  }
 
-  // Verbrauch (main) - Farbe über CSS (.bar-main)
-  svgSel.selectAll('.bar-main').data(xLabels).enter().append('rect')
+  // Consumption main
+  svgSel.selectAll('.bar-main').data(domain).enter().append('rect')
     .attr('class',d=>activePickerIndex===0?'bar-main highlight':'bar-main')
-    .attr('x',d=>consXMain(d))
+    .attr('x',d=>consXMain(d.key))
     .attr('width',consWidth)
-    .attr('y',d=>y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
-    .attr('height',d=>h-y(isGasDevice ? gasValueFor(mainMap[keyForDomain(d)]) : powerValueFor(mainMap[keyForDomain(d)])))
+    .attr('y',d=>y(isGasDevice ? gasValueFor(mainMapByKey[d.key]) : powerValueFor(mainMapByKey[d.key])))
+    .attr('height',d=>h-y(isGasDevice ? gasValueFor(mainMapByKey[d.key]) : powerValueFor(mainMapByKey[d.key])))
     .style('opacity',mainOpacity)
     .on('mouseover',function(e,d){
       activePickerIndex=0;
-      const key = keyForDomain(d);
-      const m = mainMap[key];
+      const m = mainMapByKey[d.key];
       const consVal = isGasDevice ? gasValueFor(m) : powerValueFor(m);
       const feedVal = (!isGasDevice && m) ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
-      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      const tsForLabel = d.startTs || m?.Timestamp || d?.meta?.slotStartTs || 0;
+      const timeLbl = tooltipTimeLbl(d.label, pickers[0], tsForLabel);
       placeTooltipAboveRect(this, tooltipHTML(isGasDevice?'Gas':'Verbrauch', timeLbl, consVal, feedVal));
     })
     .on('mousemove',function(e,d){
       activePickerIndex=0;
-      const key = keyForDomain(d);
-      const m = mainMap[key];
+      const m = mainMapByKey[d.key];
       const consVal = isGasDevice ? gasValueFor(m) : powerValueFor(m);
       const feedVal = (!isGasDevice && m) ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
-      const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+      const tsForLabel = d.startTs || m?.Timestamp || d?.meta?.slotStartTs || 0;
+      const timeLbl = tooltipTimeLbl(d.label, pickers[0], tsForLabel);
       placeTooltipAboveRect(this, tooltipHTML(isGasDevice?'Gas':'Verbrauch', timeLbl, consVal, feedVal));
     })
     .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
 
-  // Vergleich Verbrauch - Farbe über CSS (.bar-compare)
+  // Consumption compare
   if(compareActive){
-    svgSel.selectAll('.bar-compare').data(xLabels).enter().append('rect')
+    svgSel.selectAll('.bar-compare').data(domain).enter().append('rect')
       .attr('class',d=>activePickerIndex===1?'bar-compare highlight':'bar-compare')
-      .attr('x',d=>consXCompare(d))
+      .attr('x',d=>consXCompare(d.key))
       .attr('width',consWidth)
-      .attr('y',d=>y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
-      .attr('height',d=>h-y(isGasDevice ? gasValueFor(compareMap[keyForDomain(d)]) : powerValueFor(compareMap[keyForDomain(d)])))
+      .attr('y',d=>y(isGasDevice ? gasValueFor(compareMapByKey[d.key]) : powerValueFor(compareMapByKey[d.key])))
+      .attr('height',d=>h-y(isGasDevice ? gasValueFor(compareMapByKey[d.key]) : powerValueFor(compareMapByKey[d.key])))
       .style('opacity',compareOpacity)
       .on('mouseover',function(e,d){
         activePickerIndex=1;
-        const key = keyForDomain(d);
-        const c = compareMap[key];
+        const c = compareMapByKey[d.key];
         const consVal = isGasDevice ? gasValueFor(c) : powerValueFor(c);
         const feedVal = (!isGasDevice && c) ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
-        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+        const tsForLabel = d.startTs || c?.Timestamp || d?.meta?.slotStartTs || 0;
+        const timeLbl = tooltipTimeLbl(d.label, pickers[1]||pickers[0], tsForLabel);
         placeTooltipAboveRect(this, tooltipHTML('Vergleich', timeLbl, consVal, feedVal));
       })
       .on('mousemove',function(e,d){
         activePickerIndex=1;
-        const key = keyForDomain(d);
-        const c = compareMap[key];
+        const c = compareMapByKey[d.key];
         const consVal = isGasDevice ? gasValueFor(c) : powerValueFor(c);
         const feedVal = (!isGasDevice && c) ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
-        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+        const tsForLabel = d.startTs || c?.Timestamp || d?.meta?.slotStartTs || 0;
+        const timeLbl = tooltipTimeLbl(d.label, pickers[1]||pickers[0], tsForLabel);
         placeTooltipAboveRect(this, tooltipHTML('Vergleich', timeLbl, consVal, feedVal));
       })
       .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
   }
 
-  // Einspeisung - Farben über CSS (.feed-main/.feed-compare)
+  // Feed-in bars
   if(!isGasDevice){
-    svgSel.selectAll('.feed-main').data(xLabels).enter().append('rect')
+    svgSel.selectAll('.feed-main').data(domain).enter().append('rect')
       .attr('class',d=>activePickerIndex===0?'feed-main highlight':'feed-main')
-      .attr('x',d=>feedXFromConsX(consXMain(d)))
+      .attr('x',d=>feedXFromConsX(consXMain(d.key)))
       .attr('width',feedWidth)
       .attr('y',d=>{
-        const key = keyForDomain(d);
-        const m = mainMap[key];
+        const m = mainMapByKey[d.key];
         const f = m ? (idxFeed1.get(m.Timestamp) || null) : null;
         return y(f?.Delta||0);
       })
       .attr('height',d=>{
-        const key = keyForDomain(d);
-        const m = mainMap[key];
+        const m = mainMapByKey[d.key];
         const f = m ? (idxFeed1.get(m.Timestamp) || null) : null;
         return h - y(f?.Delta||0);
       })
       .style('opacity',mainOpacity)
       .on('mouseover',function(e,d){
         activePickerIndex=0;
-        const key = keyForDomain(d);
-        const m = mainMap[key];
+        const m = mainMapByKey[d.key];
         const consVal = powerValueFor(m);
         const feedVal = m ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
-        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+        const tsForLabel = d.startTs || m?.Timestamp || d?.meta?.slotStartTs || 0;
+        const timeLbl = tooltipTimeLbl(d.label, pickers[0], tsForLabel);
         placeTooltipAboveRect(this, tooltipHTML('Einspeisung', timeLbl, consVal, feedVal));
       })
       .on('mousemove',function(e,d){
         activePickerIndex=0;
-        const key = keyForDomain(d);
-        const m = mainMap[key];
+        const m = mainMapByKey[d.key];
         const consVal = powerValueFor(m);
         const feedVal = m ? ((idxFeed1.get(m.Timestamp)?.Delta) || 0) : 0;
-        const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[0]);
+        const tsForLabel = d.startTs || m?.Timestamp || d?.meta?.slotStartTs || 0;
+        const timeLbl = tooltipTimeLbl(d.label, pickers[0], tsForLabel);
         placeTooltipAboveRect(this, tooltipHTML('Einspeisung', timeLbl, consVal, feedVal));
       })
       .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
 
     if(compareActive){
-      svgSel.selectAll('.feed-compare').data(xLabels).enter().append('rect')
+      svgSel.selectAll('.feed-compare').data(domain).enter().append('rect')
         .attr('class',d=>activePickerIndex===1?'feed-compare highlight':'feed-compare')
-        .attr('x',d=>feedXFromConsX(consXCompare(d)))
+        .attr('x',d=>feedXFromConsX(consXCompare(d.key)))
         .attr('width',feedWidth)
         .attr('y',d=>{
-          const key = keyForDomain(d);
-          const c = compareMap[key];
+          const c = compareMapByKey[d.key];
           const f2 = c ? (idxFeed2.get(c.Timestamp) || null) : null;
           return y(f2?.Delta||0);
         })
         .attr('height',d=>{
-          const key = keyForDomain(d);
-          const c = compareMap[key];
+          const c = compareMapByKey[d.key];
           const f2 = c ? (idxFeed2.get(c.Timestamp) || null) : null;
           return h - y(f2?.Delta||0);
         })
         .style('opacity',compareOpacity)
         .on('mouseover',function(e,d){
           activePickerIndex=1;
-          const key = keyForDomain(d);
-          const c = compareMap[key];
+          const c = compareMapByKey[d.key];
           const consVal = powerValueFor(c);
           const feedVal = c ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
-          const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+          const tsForLabel = d.startTs || c?.Timestamp || d?.meta?.slotStartTs || 0;
+          const timeLbl = tooltipTimeLbl(d.label, pickers[1]||pickers[0], tsForLabel);
           placeTooltipAboveRect(this, tooltipHTML('Einspeisung (Vergleich)', timeLbl, consVal, feedVal));
         })
         .on('mousemove',function(e,d){
           activePickerIndex=1;
-          const key = keyForDomain(d);
-          const c = compareMap[key];
+          const c = compareMapByKey[d.key];
           const consVal = powerValueFor(c);
           const feedVal = c ? ((idxFeed2.get(c.Timestamp)?.Delta) || 0) : 0;
-          const timeLbl = tooltipTimeLbl((d && typeof d === 'object' && 'lbl' in d) ? d.lbl : d, pickers[1]||pickers[0]);
+          const tsForLabel = d.startTs || c?.Timestamp || d?.meta?.slotStartTs || 0;
+          const timeLbl = tooltipTimeLbl(d.label, pickers[1]||pickers[0], tsForLabel);
           placeTooltipAboveRect(this, tooltipHTML('Einspeisung (Vergleich)', timeLbl, consVal, feedVal));
         })
         .on('mouseout',function(){ activePickerIndex = null; hideTooltip(); });
     }
   }
 
-  // Aggregate
   function sumDisplayed(){
     let sMainCons=0, sMainFeed=0, sCmpCons=0, sCmpFeed=0;
 
-    for(const lbl of xLabels){
-      const key = keyForDomain(lbl);
-      const m = mainMap[key];
-      const c = compareMap[key];
+    for(const it of domain){
+      const m = mainMapByKey[it.key];
+      const c = compareMapByKey[it.key];
 
       if(isGasDevice){
         sMainCons += gasValueFor(m);
@@ -1269,9 +1337,7 @@ function renderChart(data1, data2){
 
   sumDisplayed();
   renderSummary();
-  if(tableContainer.style.display === 'block'){
-    renderTablesFromChart(xLabels, mainMap, compareMap, idxFeed1, idxFeed2);
-  }
+  if(tableContainer.style.display === 'block') renderTablesFromChart(domain, mainMapByKey, compareMapByKey, idxFeed1, idxFeed2);
 }
 
 // Summary formatting
@@ -1299,32 +1365,6 @@ function renderSummary(){
   summaryDiv.innerHTML = html;
 }
 
-function getTsForRow(lbl, picker, entry){
-  if(entry && typeof entry.Timestamp === 'number') return entry.Timestamp;
-
-  if(typeof lbl === 'number' && picker && !picker.day && !picker.month && !picker.year){
-    return lbl;
-  }
-
-  if(picker?.year){
-    const y = Number(picker.year);
-    const m = Number(picker.month||1);
-    const d = Number(picker.day||1);
-
-    if(picker.day){
-      const hh = typeof lbl === 'string' ? Number(String(lbl).slice(0,2)) : Number(lbl||0);
-      return Math.floor(new Date(y, m-1, d, hh, 0, 0).getTime()/1000);
-    }
-    if(picker.month && !picker.day){
-      return Math.floor(new Date(y, m-1, Number(lbl||1), 0, 0, 0).getTime()/1000);
-    }
-    if(!picker.month){
-      return Math.floor(new Date(y, Number(lbl||1)-1, 1, 0, 0, 0).getTime()/1000);
-    }
-  }
-  return 0;
-}
-
 function renderTableBlock(title, rows, opts){
   const fmt3 = v => Number(v ?? 0).toFixed(3).replace('.', ',');
   let html = `<div class="card" style="margin-top:12px;padding:12px;">`;
@@ -1341,6 +1381,7 @@ function renderTableBlock(title, rows, opts){
   } else {
     html += `<th>Verbrauch [kWh]</th><th>Einspeisung [kWh]</th>`;
   }
+
   html += `</tr></thead><tbody>`;
 
   for(const r of rows){
@@ -1357,15 +1398,13 @@ function renderTableBlock(title, rows, opts){
   return html;
 }
 
-function renderTablesFromChart(xLabels, mainMap, compareMap, feedIdx1, feedIdx2){
+function renderTablesFromChart(domain, mainMapByKey, compareMapByKey, feedIdx1, feedIdx2){
   lastTableDataMain = [];
   lastTableDataCompare = [];
 
-  for(const lbl of xLabels){
-    const key = (lbl && typeof lbl === 'object' && 'idx' in lbl) ? lbl.idx : lbl;
-
-    const m = mainMap[key];
-    const tsMain = getTsForRow((lbl && typeof lbl === 'object' && 'lbl' in lbl) ? lbl.lbl : lbl, pickers[0], m);
+  for(const it of domain){
+    const m = mainMapByKey[it.key];
+    const tsMain = it.startTs || m?.Timestamp || it?.meta?.slotStartTs || 0;
     const dtMain = tsMain ? formatBerlin(tsMain) : {date:'', time:''};
 
     if(isGasDevice){
@@ -1380,8 +1419,8 @@ function renderTablesFromChart(xLabels, mainMap, compareMap, feedIdx1, feedIdx2)
     }
 
     if(compareActive){
-      const c = compareMap[key];
-      const tsCmp = getTsForRow((lbl && typeof lbl === 'object' && 'lbl' in lbl) ? lbl.lbl : lbl, pickers[1]||pickers[0], c);
+      const c = compareMapByKey[it.key];
+      const tsCmp = it.startTs || c?.Timestamp || it?.meta?.slotStartTs || 0;
       const dtCmp = tsCmp ? formatBerlin(tsCmp) : {date:'', time:''};
 
       if(isGasDevice){
@@ -1459,6 +1498,52 @@ function downloadCsv(which){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * Lädt Report für Picker, optional Tages-Offset (UTC-Kalenderlogik).
+ * Live: API
+ * Demo: bleibt wie gehabt (Tagesdateien, Monat/Jahr Aggregation)
+ */
+async function fetchReportForPicker(picker, dayOffset=0){
+  // Demo handling bleibt im bestehenden updateVisualization inner fetchReportForPicker (siehe unten)
+  // Für Live hier: Offset unterstützen
+  let y = Number(picker.year), m = Number(picker.month), d = Number(picker.day);
+
+  if(dayOffset !== 0 && y && m && d){
+    const dt = new Date(Date.UTC(y, m-1, d, 12, 0, 0));
+    dt.setUTCDate(dt.getUTCDate() + dayOffset);
+    y = dt.getUTCFullYear();
+    m = dt.getUTCMonth()+1;
+    d = dt.getUTCDate();
+  }
+
+  let url = apiUrl + selectedDevice + '/report';
+  if(y && !picker.month) url += `?year=${y}`;
+  else if(y && picker.month && !picker.day) url += `?year=${y}&month=${m}`;
+  else if(y && picker.month && picker.day) url += `?year=${y}&month=${m}&day=${d}`;
+  return fetchJSON(url);
+}
+
+function mergeReportValuesInto(target, src, isGas){
+  if(!src) return;
+
+  if(isGas){
+    const a = target?.Gas?.ReportValues || [];
+    const b = src?.Gas?.ReportValues || [];
+    if(!target.Gas) target.Gas = {Sum:0,ReportValues:[]};
+    target.Gas.ReportValues = [...b, ...a];
+  } else {
+    const aC = target?.Consumption?.ReportValues || [];
+    const bC = src?.Consumption?.ReportValues || [];
+    if(!target.Consumption) target.Consumption = {Sum:0,ReportValues:[]};
+    target.Consumption.ReportValues = [...bC, ...aC];
+
+    const aF = target?.FeedIn?.ReportValues || [];
+    const bF = src?.FeedIn?.ReportValues || [];
+    if(!target.FeedIn) target.FeedIn = {Sum:0,Max:0,ReportValues:[]};
+    target.FeedIn.ReportValues = [...bF, ...aF];
+  }
+}
+
 async function updateVisualization(){
   if(!selectedDevice) return;
 
@@ -1466,13 +1551,13 @@ async function updateVisualization(){
 
   const selOpt = devicesDropdown.options[devicesDropdown.selectedIndex];
   const division = Number(selOpt?.dataset?.division);
-
   isGasDevice = (division === 4);
 
   gasSwitchContainer.style.display = isGasDevice ? 'flex' : 'none';
   updateChartTitle();
 
-  async function fetchReportForPicker(picker){
+  // ---- fetch report helper (Demo+Live) ----
+  async function fetchReportForPickerWithDemo(picker){
     const y = picker.year, m = picker.month, d = picker.day;
 
     if(isDemoMode()){
@@ -1490,6 +1575,7 @@ async function updateVisualization(){
       throw new Error('Ungültige Picker-Auswahl.');
     }
 
+    // Live (ohne Offset hier)
     let url = apiUrl + selectedDevice + '/report';
     if(y && !m) url += `?year=${y}`;
     else if(y && m && !d) url += `?year=${y}&month=${m}`;
@@ -1500,7 +1586,13 @@ async function updateVisualization(){
   let data1 = null, data2 = null;
 
   try{
-    data1 = await fetchReportForPicker(pickers[0]);
+    data1 = await fetchReportForPickerWithDemo(pickers[0]);
+
+    // Tagesansicht (LIVE) -> 2 UTC-Tage mergen (Vortag + Tag) für korrekten Berlin-Tag
+    if(!isDemoMode() && pickers[0].year && pickers[0].month && pickers[0].day){
+      const prev = await fetchReportForPicker(pickers[0], -1);
+      mergeReportValuesInto(data1, prev, isGasDevice);
+    }
   }catch(e){
     loadingIndicator.style.visibility = 'hidden';
     alert("Fehler beim Laden der Daten: "+e.message);
@@ -1510,7 +1602,7 @@ async function updateVisualization(){
   if(!isGasDevice && !data1.FeedIn) data1.FeedIn = {Sum:0,Max:0,ReportValues:[]};
   if(isGasDevice && !data1.Gas) data1.Gas = {Sum:0,ReportValues:[]};
 
-  // HT/NT-Erkennung
+  // HT/NT-Erkennung (nur Strom / Consumption)
   isHtNtDevice = false;
   try{
     if(!isGasDevice){
@@ -1530,7 +1622,13 @@ async function updateVisualization(){
 
   if(compareActive && pickers[1]){
     try{
-      data2 = await fetchReportForPicker(pickers[1]);
+      data2 = await fetchReportForPickerWithDemo(pickers[1]);
+
+      if(!isDemoMode() && pickers[1].year && pickers[1].month && pickers[1].day){
+        const prev2 = await fetchReportForPicker(pickers[1], -1);
+        mergeReportValuesInto(data2, prev2, isGasDevice);
+      }
+
       if(!isGasDevice && data2 && !data2.FeedIn) data2.FeedIn = {Sum:0,Max:0,ReportValues:[]};
       if(isGasDevice && data2 && !data2.Gas) data2.Gas = {Sum:0,ReportValues:[]};
     }catch(e){

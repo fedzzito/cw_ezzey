@@ -1140,6 +1140,12 @@ function renderChart(data1, data2){
       return it ? it.label : key;
     }));
 
+    // FIX: Tick auf Intervall-START (linke Bandkante) nur für Stundenansicht (Tagesansicht)
+    if(pickers[0].year && pickers[0].month && pickers[0].day){
+      xAxisG.selectAll(".tick")
+       .attr("transform", (d) => `translate(${x(d)},0)`);
+    }
+
   xAxisG.selectAll("text")
     .style("text-anchor", "end")
     .attr("dx", "-0.8em")

@@ -1,9 +1,9 @@
-# vizzey
+# ezzey
 Visualisierung von Energiedaten
 
-# vizzey – Dashboard zur Visualisierung und Auswertung von Energiesensordaten
+# ezzey – Dashboard zur Visualisierung und Auswertung von Energiesensordaten
 
-**vizzey** ist eine Open-Source-Webanwendung zur einfachen und übersichtlichen Visualisierung von Energiedaten aus Energiesensoren und zukünftig anderen Quellen. Die Anwendung läuft im Browser, benötigt keine Installation und setzt auf direkte API-Abfrage sowie CSV-Import/Export. Sie ist für Einsteiger und Fortgeschrittene konzipiert und kann von der Community weiterentwickelt werden.
+**ezzey** ist eine Open-Source-Webanwendung zur einfachen und übersichtlichen Visualisierung von Energiedaten aus Energiesensoren und zukünftig anderen Quellen. Die Anwendung läuft im Browser, benötigt keine Installation und setzt auf direkte API-Abfrage sowie CSV-Import/Export. Sie ist für Einsteiger und Fortgeschrittene konzipiert und kann von der Community weiterentwickelt werden.
 
 Zu Beginn können Cloud-Daten von Geräten von powerfox abgerufen und visualisiert werden.
 
@@ -29,14 +29,14 @@ Die Anwendung wurde durch Vibe-Coding erstellt und nicht von einem professionell
 ### 1. Online nutzen
 
 Die Anwendung ist direkt über Netlify erreichbar, z.B. unter  
-[https://vizzey.netlify.app](https://vizzey.netlify.app)  
+[https://ezzey.netlify.app](https://ezzey.netlify.app)  
 (ggf. aktuellen Link prüfen!)
 
 ### 2. Lokal ausführen
 
 1. Repository klonen:
     ```bash
-    git clone https://github.com/fedzzito/vizzey.git
+    git clone https://github.com/fedzzito/ezzey.git
     ```
 2. Öffne die Datei `index.html` im Browser.
 
@@ -118,7 +118,7 @@ Login-Daten werden nur lokal im Browser gespeichert und nicht weitergegeben.
 
 ## Links
 
-- [GitHub Repo](https://github.com/fedzzito/vizzey)
+- [GitHub Repo](https://github.com/fedzzito/ezzey)
 - [Powerfox API Doku](https://www.powerfox.energy/developer/)
 - [D3.js](https://d3js.org/)
 - [Netlify](https://www.netlify.com/)

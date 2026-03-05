@@ -479,6 +479,19 @@ function formatYYYYMMDD(y, m, d){
 function demoReportPath(deviceId, yyyy_mm_dd){
   return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${yyyy_mm_dd}.json`;
 }
+function demoPathMonth(deviceId, y, m){
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${y}-${pad(m)}.json`;
+}
+function demoPathYear(deviceId, y){
+  return `${DEMO.baseDevicePath}/${encodeURIComponent(deviceId)}/${y}.json`;
+}
+async function tryFetchJSON(url){
+  try{
+    return await fetchJSON(url);
+  }catch(e){
+    return null;
+  }
+}
 async function tryLoadDemoDayReport(deviceId, y, m, d){
   const path = demoReportPath(deviceId, formatYYYYMMDD(y, m, d));
   try{
@@ -1573,9 +1586,17 @@ async function updateVisualization(){
         return rep;
       }
       if(y && m && !d){
+        const monthUrl = demoPathMonth(selectedDevice, y, m);
+        const monthData = await tryFetchJSON(monthUrl);
+        if(monthData) return monthData;
+        // Fallback auf alte Aggregation falls keine Monatsdatei existiert
         return buildDemoMonthReport(selectedDevice, y, m);
       }
       if(y && !m){
+        const yearUrl = demoPathYear(selectedDevice, y);
+        const yearData = await tryFetchJSON(yearUrl);
+        if(yearData) return yearData;
+        // Fallback auf alte Aggregation falls keine Jahresdatei existiert
         return buildDemoYearReport(selectedDevice, y);
       }
       throw new Error('Ungültige Picker-Auswahl.');

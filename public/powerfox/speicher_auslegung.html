@@ -283,10 +283,10 @@ async function loadYearData(deviceId, progressCb){
   const now = new Date();
   const entries = []; // {timestamp, consumption, feedin} per hour
 
-  // Calculate date range: last 365 days
+  // Calculate date range: last 365 days (today minus 364 = 365 days total incl. today)
   const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 365);
+  startDate.setDate(startDate.getDate() - 364);
 
   // Build list of days to fetch
   const days = [];
@@ -415,10 +415,7 @@ function simulateStorage(entries, capacity, maxPV){
 
     // Available surplus to charge (limited by max PV power for this storage class)
     // feedin is in kWh per interval; maxPV is kW, interval is ~1h so limit is maxPV kWh
-    let surplusAvailable = e.feedin;
-    if(maxPV > 0){
-      surplusAvailable = Math.min(surplusAvailable, maxPV);
-    }
+    let surplusAvailable = Math.min(e.feedin, maxPV);
 
     // Try to charge from surplus
     let canCharge = Math.min(surplusAvailable, (capacity - soc) / chargeEff);
@@ -485,14 +482,21 @@ function findOptimalStorage(results){
   // If no feed-in at all, no storage is useful
   if(baseline.totalFeedin <= 0) return baseline;
 
+  // Thresholds for diminishing returns:
+  // MIN_MARGINAL_GAIN: if an additional storage step adds less than 1 percentage point
+  //   of autarky, the benefit is negligible compared to the cost increase.
+  // DIMINISHING_RATIO: if the marginal gain is less than 30% of the previous step's
+  //   gain, the curve is flattening rapidly → larger storage not cost-effective.
+  const MIN_MARGINAL_GAIN = 1.0;
+  const DIMINISHING_RATIO = 0.3;
+
   let bestIdx = 1;
 
   for(let i = 2; i < results.length; i++){
     const marginal = results[i].autarkiegrad - results[i-1].autarkiegrad;
     const prevMarginal = results[i-1].autarkiegrad - results[i-2].autarkiegrad;
 
-    // If marginal gain drops below 1% or is less than 30% of previous gain → diminishing returns
-    if(marginal < 1.0 || (prevMarginal > 0 && marginal < prevMarginal * 0.3)){
+    if(marginal < MIN_MARGINAL_GAIN || (prevMarginal > 0 && marginal < prevMarginal * DIMINISHING_RATIO)){
       bestIdx = i - 1;
       break;
     }

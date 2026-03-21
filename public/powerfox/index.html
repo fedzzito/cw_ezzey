@@ -72,6 +72,11 @@
           <h3>Leistungswerte</h3>
           <p class="kv">Analysiere aktuellen Verbrauch und historische Leistungswerte</p>
         </a>
+
+        <a href="speicher_auslegung.html" class="card" id="speicherKachel" role="button" tabindex="0" aria-pressed="false">
+          <h3>PV-Speicher Auslegung</h3>
+          <p class="kv">Simuliere und finde die optimale Speichergröße basierend auf deinen Verbrauchsdaten</p>
+        </a>
       </section>
     </main>
 
@@ -93,6 +98,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const energiedatenKachel = document.getElementById('energiedatenKachel');
     const leistungswertKachel = document.getElementById('leistungswertKachel');
+    const speicherKachel = document.getElementById('speicherKachel');
     const hintCard = document.getElementById('hintCard');
     const demoBtn = document.getElementById('demoBtn');
 
@@ -196,8 +202,9 @@
     // Kachel navigation (click and keyboard activation)
     energiedatenKachel.addEventListener('click', ()=> location.href = 'powerfox_energie.html');
     leistungswertKachel.addEventListener('click', ()=> location.href = 'powerfox_leistung.html');
+    speicherKachel.addEventListener('click', ()=> location.href = 'speicher_auslegung.html');
 
-    [energiedatenKachel, leistungswertKachel].forEach(el=>{
+    [energiedatenKachel, leistungswertKachel, speicherKachel].forEach(el=>{
       el.addEventListener('keydown', (e)=>{
         if(e.key === 'Enter' || e.key === ' '){
           e.preventDefault();

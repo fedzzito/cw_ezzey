@@ -251,6 +251,24 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-famil
 .paypal-donate form{ display:inline-flex; align-items:center; gap:8px; }
 
 /* ---------------------
+   Test-Banner (Tester-Aufruf)
+   --------------------- */
+.test-banner{
+  background: linear-gradient(90deg,#ff8a00,#ffb347);
+  color:#241900;
+  text-align:center;
+  padding:10px 16px;
+  font-size:14px;
+  line-height:1.5;
+}
+.test-banner p{ margin:0; max-width:960px; margin-inline:auto; }
+.test-banner strong{ font-weight:800; }
+.test-banner a{ color:#241900; font-weight:800; text-decoration:underline; }
+.test-banner a:hover{ text-decoration:none; }
+
+body.has-test-banner .paypal-donate{ top:58px; }
+
+/* ---------------------
    Forms & Controls
    --------------------- */
 label{ font-weight:600; display:block; margin-bottom:6px; }
